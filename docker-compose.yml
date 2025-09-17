@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  px4-ros2:
+    image: px4io/px4-dev-ros2-humble:latest
+    container_name: px4_ros2_dev
+    network_mode: host
+    privileged: true
+    environment:
+      - DISPLAY=host.docker.internal:0
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - ./workspace:/home/workspace
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    stdin_open: true
+    tty: true
+    command: /bin/bash
+
+  px4-sitl:
+    image: px4io/px4-dev-nuttx:latest
+    container_name: px4_sitl
+    network_mode: host
+    privileged: true
+    environment:
+      - DISPLAY=host.docker.internal:0
+      - PX4_SIM_HOST_ADDR=host.docker.internal
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    command: make px4_sitl gazebo-classic

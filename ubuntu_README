@@ -1,0 +1,90 @@
+# Install dependencies
+sudo apt update
+sudo apt install ros-humble-px4-msgs
+pip3 install px4tools pymavlink
+
+# Clone PX4 (for SITL)
+cd ~
+git clone https://github.com/PX4/PX4-Autopilot.git --recursive
+
+# Create workspace
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+
+# Copy the offboard_control package here
+# (or git clone your repository)
+
+# Build
+cd ~/ros2_ws
+colcon build --packages-select offboard_control
+source install/setup.bash
+
+IN ONE TERMINAL:
+cd ~/PX4-Autopilot
+make px4_sitl_default gazebo-classic
+
+IN ANOTHER TERMINAL:
+cd ~/ros2_ws
+source install/setup.bash
+ros2 launch offboard_control offboard_yaw_demo.launch.py
+
+IN A THIRD TERMINAL:
+# Face North (0 radians)
+ros2 topic pub /target_yaw std_msgs/Float32 "{data: 0.0}"
+
+# Face East (90 degrees = 1.57 radians)
+ros2 topic pub /target_yaw std_msgs/Float32 "{data: 1.57}"
+
+# Face South (180 degrees = 3.14 radians)  
+ros2 topic pub /target_yaw std_msgs/Float32 "{data: 3.14}"
+
+# Face West (270 degrees = 4.71 radians)
+ros2 topic pub /target_yaw std_msgs/Float32 "{data: 4.71}"
+
+NOW MONITOR THE SYSTEM:
+# Watch vehicle status
+ros2 topic echo /fmu/out/vehicle_status
+
+# Monitor setpoints being sent
+ros2 topic hz /fmu/in/trajectory_setpoint
+
+# Check if offboard mode is active
+ros2 topic echo /fmu/out/vehicle_control_mode
+
+____ Small testing checklist ____
+# 1. Verify DDS connection
+ros2 topic list | grep fmu
+# Should see /fmu/in/* and /fmu/out/* topics
+
+# 2. Check streaming rate
+ros2 topic hz /fmu/in/offboard_control_mode
+# Should show ~10 Hz
+
+# 3. Test failsafe
+# Start sending yaw commands, then Ctrl+C
+# Drone should hold position, not crash
+
+# 4. Test mode switching  
+# Watch QGroundControl - should show "Offboard" mode
+
+# 5. Emergency stop
+ros2 service call /fmu/in/vehicle_command px4_msgs/srv/VehicleCommand \
+  "{command: 400, param1: 0.0}"  # Disarm
+
+____ Some common issues ____
+"No /fmu topics visible"
+
+# Check agent is running
+ps aux | grep MicroXRCEAgent
+# Restart with debug
+MicroXRCEAgent udp4 -p 8888 -v6
+
+"Offboard mode rejected"
+
+# Check streaming before mode switch
+ros2 param set /yaw_controller pre_stream_cycles 100  # Increase pre-stream time
+
+"Vehicle won't arm"
+
+# Check safety switch (SITL)
+# In QGC: Vehicle Setup → Safety → FORCE ARM

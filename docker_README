@@ -1,0 +1,15 @@
+# Start containers
+docker-compose up -d
+
+# Enter ROS 2 container
+docker exec -it px4_ros2_dev bash
+
+# Inside container, setup workspace
+cd /home/workspace
+mkdir -p ros2_ws/src
+cd ros2_ws/src
+git clone https://github.com/PX4/px4_msgs.git
+cd ..
+colcon build
+
+# Run the code!!!!!!!!!!
