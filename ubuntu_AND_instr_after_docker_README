@@ -19,6 +19,8 @@ cd ~/ros2_ws
 colcon build --packages-select offboard_control
 source install/setup.bash
 
+***********SHOULD BE ABLE TO START HERE IF DOCKER IS COMPOSED***********
+
 IN ONE TERMINAL:
 cd ~/PX4-Autopilot
 make px4_sitl_default gazebo-classic
