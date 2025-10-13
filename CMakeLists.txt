@@ -12,8 +12,11 @@ find_package(px4_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
-# Add executable
+# Add executables
 add_executable(yaw_controller_node src/yaw_controller_node.cpp)
+add_executable(dummy_yaw_publisher src/dummy_yaw_publisher.cpp)
+add_executable(px4_simulator src/px4_simulator.cpp)
+add_executable(simple_test_node src/simple_test_node.cpp)
 
 # Link dependencies
 ament_target_dependencies(yaw_controller_node
@@ -23,9 +26,27 @@ ament_target_dependencies(yaw_controller_node
   geometry_msgs
 )
 
+ament_target_dependencies(dummy_yaw_publisher
+  rclcpp
+  std_msgs
+)
+
+ament_target_dependencies(px4_simulator
+  rclcpp
+  px4_msgs
+)
+
+ament_target_dependencies(simple_test_node
+  rclcpp
+  std_msgs
+)
+
 # Install executables
 install(TARGETS
   yaw_controller_node
+  dummy_yaw_publisher
+  px4_simulator
+  simple_test_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -42,4 +63,3 @@ install(DIRECTORY
 )
 
 ament_package()
-

@@ -1,0 +1,6 @@
+Invoking command in '/home/workspace/build/offboard_control': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/workspace -DCMAKE_INSTALL_PREFIX=/home/workspace/install/offboard_control
+Invoked command in '/home/workspace/build/offboard_control' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/workspace -DCMAKE_INSTALL_PREFIX=/home/workspace/install/offboard_control
+Invoking command in '/home/workspace/build/offboard_control': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/workspace/build/offboard_control -- -j8 -l8
+Invoked command in '/home/workspace/build/offboard_control' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/workspace/build/offboard_control -- -j8 -l8
+Invoking command in '/home/workspace/build/offboard_control': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/workspace/build/offboard_control
+Invoked command in '/home/workspace/build/offboard_control' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/workspace/build/offboard_control
