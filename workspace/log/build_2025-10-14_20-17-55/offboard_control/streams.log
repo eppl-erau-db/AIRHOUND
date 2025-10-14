@@ -1,0 +1,70 @@
+[0.151s] Invoking command in '/home/workspace/build/offboard_control': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/workspace -DCMAKE_INSTALL_PREFIX=/home/workspace/install/offboard_control
+[0.771s] -- The C compiler identification is GNU 11.4.0
+[1.199s] -- The CXX compiler identification is GNU 11.4.0
+[1.248s] -- Detecting C compiler ABI info
+[1.993s] -- Detecting C compiler ABI info - done
+[2.011s] -- Check for working C compiler: /usr/bin/cc - skipped
+[2.011s] -- Detecting C compile features
+[2.014s] -- Detecting C compile features - done
+[2.028s] -- Detecting CXX compiler ABI info
+[2.679s] -- Detecting CXX compiler ABI info - done
+[2.700s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[2.700s] -- Detecting CXX compile features
+[2.701s] -- Detecting CXX compile features - done
+[2.729s] -- Found ament_cmake: 1.3.12 (/opt/ros/humble/share/ament_cmake/cmake)
+[3.334s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[3.618s] -- Found rclcpp: 16.0.15 (/opt/ros/humble/share/rclcpp/cmake)
+[3.664s] -- Found rosidl_generator_c: 3.1.7 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[3.666s] -- Found rosidl_adapter: 3.1.7 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[3.674s] -- Found rosidl_generator_cpp: 3.1.7 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[3.687s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[3.702s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[3.745s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[3.749s] -- Found rmw_fastrtps_cpp: 6.2.8 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[4.155s] -- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.2")  
+[4.187s] -- Found FastRTPS: /opt/ros/humble/include  
+[4.239s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[4.259s] -- Looking for pthread.h
+[4.840s] -- Looking for pthread.h - found
+[4.841s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+[5.434s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+[5.435s] -- Found Threads: TRUE  
+[5.727s] -- Configuring done
+[5.929s] -- Generating done
+[5.976s] -- Build files have been written to: /home/workspace/build/offboard_control
+[5.986s] Invoked command in '/home/workspace/build/offboard_control' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/workspace -DCMAKE_INSTALL_PREFIX=/home/workspace/install/offboard_control
+[5.993s] Invoking command in '/home/workspace/build/offboard_control': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/workspace/build/offboard_control -- -j8 -l8
+[6.398s] [ 50%] Building CXX object CMakeFiles/dummy_yaw_publisher.dir/src/dummy_yaw_publisher.cpp.o
+[6.399s] [ 50%] Building CXX object CMakeFiles/simple_test_node.dir/src/simple_test_node.cpp.o
+[10.614s] [ 75%] Linking CXX executable dummy_yaw_publisher
+[11.172s] [ 75%] Built target dummy_yaw_publisher
+[13.320s] [100%] Linking CXX executable simple_test_node
+[14.329s] [100%] Built target simple_test_node
+[14.389s] Invoked command in '/home/workspace/build/offboard_control' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/workspace/build/offboard_control -- -j8 -l8
+[14.436s] Invoking command in '/home/workspace/build/offboard_control': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/workspace/build/offboard_control
+[14.483s] -- Install configuration: ""
+[14.533s] -- Installing: /home/workspace/install/offboard_control/lib/offboard_control/dummy_yaw_publisher
+[14.549s] -- Set runtime path of "/home/workspace/install/offboard_control/lib/offboard_control/dummy_yaw_publisher" to ""
+[14.550s] -- Installing: /home/workspace/install/offboard_control/lib/offboard_control/simple_test_node
+[14.584s] -- Set runtime path of "/home/workspace/install/offboard_control/lib/offboard_control/simple_test_node" to ""
+[14.599s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/launch
+[14.621s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/launch/offboard_yaw_demo.launch.py
+[14.625s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/launch/test_local_no_px4.launch.py
+[14.628s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/launch/simple_test.launch.py
+[14.633s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/launch/test_with_dummy.launch.py
+[14.668s] -- Installing: /home/workspace/install/offboard_control/share/ament_index/resource_index/package_run_dependencies/offboard_control
+[14.682s] -- Installing: /home/workspace/install/offboard_control/share/ament_index/resource_index/parent_prefix_path/offboard_control
+[14.696s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/environment/ament_prefix_path.sh
+[14.699s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/environment/ament_prefix_path.dsv
+[14.703s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/environment/path.sh
+[14.706s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/environment/path.dsv
+[14.710s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/local_setup.bash
+[14.714s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/local_setup.sh
+[14.718s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/local_setup.zsh
+[14.721s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/local_setup.dsv
+[14.725s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/package.dsv
+[14.737s] -- Installing: /home/workspace/install/offboard_control/share/ament_index/resource_index/packages/offboard_control
+[14.749s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/cmake/offboard_controlConfig.cmake
+[14.752s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/cmake/offboard_controlConfig-version.cmake
+[14.756s] -- Installing: /home/workspace/install/offboard_control/share/offboard_control/package.xml
+[14.769s] Invoked command in '/home/workspace/build/offboard_control' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/workspace/build/offboard_control

@@ -1,0 +1,222 @@
+[0.000000] (-) TimerEvent: {}
+[0.000185] (offboard_control) JobQueued: {'identifier': 'offboard_control', 'dependencies': OrderedDict()}
+[0.000480] (offboard_control) JobStarted: {'identifier': 'offboard_control'}
+[0.068949] (offboard_control) JobProgress: {'identifier': 'offboard_control', 'progress': 'cmake'}
+[0.097724] (-) TimerEvent: {}
+[0.133723] (offboard_control) Command: {'cmd': ['/usr/bin/cmake', '/home/workspace', '-DCMAKE_INSTALL_PREFIX=/home/workspace/install/offboard_control'], 'cwd': '/home/workspace/build/offboard_control', 'env': OrderedDict([('HOSTNAME', 'docker-desktop'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('ROS_LOCALHOST_ONLY', '0'), ('QT_X11_NO_MITSHM', '1'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('DISPLAY', 'host.docker.internal:0'), ('LANG', 'C.UTF-8'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('PWD', '/home/workspace/build/offboard_control'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/opt/ros/humble')]), 'shell': False}
+[0.198690] (-) TimerEvent: {}
+[0.303661] (-) TimerEvent: {}
+[0.404759] (-) TimerEvent: {}
+[0.505872] (-) TimerEvent: {}
+[0.608687] (-) TimerEvent: {}
+[0.710891] (-) TimerEvent: {}
+[0.771545] (offboard_control) StdoutLine: {'line': b'-- The C compiler identification is GNU 11.4.0\n'}
+[0.811687] (-) TimerEvent: {}
+[0.912689] (-) TimerEvent: {}
+[1.013657] (-) TimerEvent: {}
+[1.114639] (-) TimerEvent: {}
+[1.199507] (offboard_control) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 11.4.0\n'}
+[1.215642] (-) TimerEvent: {}
+[1.247338] (offboard_control) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[1.316676] (-) TimerEvent: {}
+[1.419862] (-) TimerEvent: {}
+[1.521822] (-) TimerEvent: {}
+[1.625692] (-) TimerEvent: {}
+[1.728653] (-) TimerEvent: {}
+[1.829682] (-) TimerEvent: {}
+[1.930701] (-) TimerEvent: {}
+[1.991101] (offboard_control) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[2.011333] (offboard_control) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[2.011619] (offboard_control) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[2.012742] (offboard_control) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[2.028036] (offboard_control) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[2.031606] (-) TimerEvent: {}
+[2.132648] (-) TimerEvent: {}
+[2.234690] (-) TimerEvent: {}
+[2.338318] (-) TimerEvent: {}
+[2.441660] (-) TimerEvent: {}
+[2.542692] (-) TimerEvent: {}
+[2.643722] (-) TimerEvent: {}
+[2.677719] (offboard_control) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[2.700136] (offboard_control) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[2.700411] (offboard_control) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[2.700877] (offboard_control) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[2.729725] (offboard_control) StdoutLine: {'line': b'-- Found ament_cmake: 1.3.12 (/opt/ros/humble/share/ament_cmake/cmake)\n'}
+[2.744613] (-) TimerEvent: {}
+[2.850190] (-) TimerEvent: {}
+[2.952702] (-) TimerEvent: {}
+[3.054087] (-) TimerEvent: {}
+[3.154651] (-) TimerEvent: {}
+[3.261648] (-) TimerEvent: {}
+[3.334038] (offboard_control) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter \n'}
+[3.362631] (-) TimerEvent: {}
+[3.474633] (-) TimerEvent: {}
+[3.575860] (-) TimerEvent: {}
+[3.618579] (offboard_control) StdoutLine: {'line': b'-- Found rclcpp: 16.0.15 (/opt/ros/humble/share/rclcpp/cmake)\n'}
+[3.662264] (offboard_control) StdoutLine: {'line': b'-- Found rosidl_generator_c: 3.1.7 (/opt/ros/humble/share/rosidl_generator_c/cmake)\n'}
+[3.666481] (offboard_control) StdoutLine: {'line': b'-- Found rosidl_adapter: 3.1.7 (/opt/ros/humble/share/rosidl_adapter/cmake)\n'}
+[3.674124] (offboard_control) StdoutLine: {'line': b'-- Found rosidl_generator_cpp: 3.1.7 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)\n'}
+[3.677142] (-) TimerEvent: {}
+[3.687556] (offboard_control) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c\n'}
+[3.701865] (offboard_control) StdoutLine: {'line': b'-- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp\n'}
+[3.745506] (offboard_control) StdoutLine: {'line': b'-- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)\n'}
+[3.748054] (offboard_control) StdoutLine: {'line': b'-- Found rmw_fastrtps_cpp: 6.2.8 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)\n'}
+[3.780620] (-) TimerEvent: {}
+[3.881663] (-) TimerEvent: {}
+[3.983689] (-) TimerEvent: {}
+[4.088665] (-) TimerEvent: {}
+[4.155283] (offboard_control) StdoutLine: {'line': b'-- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.2")  \n'}
+[4.187310] (offboard_control) StdoutLine: {'line': b'-- Found FastRTPS: /opt/ros/humble/include  \n'}
+[4.189635] (-) TimerEvent: {}
+[4.239121] (offboard_control) StdoutLine: {'line': b"-- Using RMW implementation 'rmw_fastrtps_cpp' as default\n"}
+[4.258804] (offboard_control) StdoutLine: {'line': b'-- Looking for pthread.h\n'}
+[4.291833] (-) TimerEvent: {}
+[4.399743] (-) TimerEvent: {}
+[4.500874] (-) TimerEvent: {}
+[4.602656] (-) TimerEvent: {}
+[4.707661] (-) TimerEvent: {}
+[4.808805] (-) TimerEvent: {}
+[4.839397] (offboard_control) StdoutLine: {'line': b'-- Looking for pthread.h - found\n'}
+[4.841511] (offboard_control) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD\n'}
+[4.909716] (-) TimerEvent: {}
+[5.011659] (-) TimerEvent: {}
+[5.114647] (-) TimerEvent: {}
+[5.219657] (-) TimerEvent: {}
+[5.324143] (-) TimerEvent: {}
+[5.424687] (-) TimerEvent: {}
+[5.433463] (offboard_control) StdoutLine: {'line': b'-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success\n'}
+[5.435439] (offboard_control) StdoutLine: {'line': b'-- Found Threads: TRUE  \n'}
+[5.525879] (-) TimerEvent: {}
+[5.633688] (-) TimerEvent: {}
+[5.726525] (offboard_control) StdoutLine: {'line': b'-- Configuring done\n'}
+[5.735624] (-) TimerEvent: {}
+[5.836932] (-) TimerEvent: {}
+[5.928550] (offboard_control) StdoutLine: {'line': b'-- Generating done\n'}
+[5.938245] (-) TimerEvent: {}
+[5.975385] (offboard_control) StdoutLine: {'line': b'-- Build files have been written to: /home/workspace/build/offboard_control\n'}
+[5.986536] (offboard_control) CommandEnded: {'returncode': 0}
+[5.987453] (offboard_control) JobProgress: {'identifier': 'offboard_control', 'progress': 'build'}
+[5.989872] (offboard_control) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/workspace/build/offboard_control', '--', '-j8', '-l8'], 'cwd': '/home/workspace/build/offboard_control', 'env': OrderedDict([('HOSTNAME', 'docker-desktop'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('ROS_LOCALHOST_ONLY', '0'), ('QT_X11_NO_MITSHM', '1'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('DISPLAY', 'host.docker.internal:0'), ('LANG', 'C.UTF-8'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('PWD', '/home/workspace/build/offboard_control'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/opt/ros/humble')]), 'shell': False}
+[6.039402] (-) TimerEvent: {}
+[6.140655] (-) TimerEvent: {}
+[6.241660] (-) TimerEvent: {}
+[6.344656] (-) TimerEvent: {}
+[6.397464] (offboard_control) StdoutLine: {'line': b'[ 50%] Building CXX object CMakeFiles/dummy_yaw_publisher.dir/src/dummy_yaw_publisher.cpp.o\n'}
+[6.398943] (offboard_control) StdoutLine: {'line': b'[ 50%] Building CXX object CMakeFiles/simple_test_node.dir/src/simple_test_node.cpp.o\n'}
+[6.446623] (-) TimerEvent: {}
+[6.550624] (-) TimerEvent: {}
+[6.651629] (-) TimerEvent: {}
+[6.752614] (-) TimerEvent: {}
+[6.853613] (-) TimerEvent: {}
+[6.954628] (-) TimerEvent: {}
+[7.055656] (-) TimerEvent: {}
+[7.156671] (-) TimerEvent: {}
+[7.257676] (-) TimerEvent: {}
+[7.363804] (-) TimerEvent: {}
+[7.464831] (-) TimerEvent: {}
+[7.565707] (-) TimerEvent: {}
+[7.666663] (-) TimerEvent: {}
+[7.767690] (-) TimerEvent: {}
+[7.868752] (-) TimerEvent: {}
+[7.969746] (-) TimerEvent: {}
+[8.070670] (-) TimerEvent: {}
+[8.171907] (-) TimerEvent: {}
+[8.274822] (-) TimerEvent: {}
+[8.380868] (-) TimerEvent: {}
+[8.483704] (-) TimerEvent: {}
+[8.585670] (-) TimerEvent: {}
+[8.687690] (-) TimerEvent: {}
+[8.788664] (-) TimerEvent: {}
+[8.889662] (-) TimerEvent: {}
+[8.992683] (-) TimerEvent: {}
+[9.100659] (-) TimerEvent: {}
+[9.201662] (-) TimerEvent: {}
+[9.302675] (-) TimerEvent: {}
+[9.403710] (-) TimerEvent: {}
+[9.504674] (-) TimerEvent: {}
+[9.605671] (-) TimerEvent: {}
+[9.715682] (-) TimerEvent: {}
+[9.819663] (-) TimerEvent: {}
+[9.920677] (-) TimerEvent: {}
+[10.021819] (-) TimerEvent: {}
+[10.122693] (-) TimerEvent: {}
+[10.223670] (-) TimerEvent: {}
+[10.324757] (-) TimerEvent: {}
+[10.425750] (-) TimerEvent: {}
+[10.526658] (-) TimerEvent: {}
+[10.612705] (offboard_control) StdoutLine: {'line': b'[ 75%] Linking CXX executable dummy_yaw_publisher\n'}
+[10.630637] (-) TimerEvent: {}
+[10.731653] (-) TimerEvent: {}
+[10.833702] (-) TimerEvent: {}
+[10.940691] (-) TimerEvent: {}
+[11.041653] (-) TimerEvent: {}
+[11.143171] (-) TimerEvent: {}
+[11.171148] (offboard_control) StdoutLine: {'line': b'[ 75%] Built target dummy_yaw_publisher\n'}
+[11.248651] (-) TimerEvent: {}
+[11.350875] (-) TimerEvent: {}
+[11.453636] (-) TimerEvent: {}
+[11.559666] (-) TimerEvent: {}
+[11.665644] (-) TimerEvent: {}
+[11.771657] (-) TimerEvent: {}
+[11.871882] (-) TimerEvent: {}
+[11.977630] (-) TimerEvent: {}
+[12.083673] (-) TimerEvent: {}
+[12.184687] (-) TimerEvent: {}
+[12.286366] (-) TimerEvent: {}
+[12.388139] (-) TimerEvent: {}
+[12.493651] (-) TimerEvent: {}
+[12.599619] (-) TimerEvent: {}
+[12.700672] (-) TimerEvent: {}
+[12.812629] (-) TimerEvent: {}
+[12.917159] (-) TimerEvent: {}
+[13.023659] (-) TimerEvent: {}
+[13.126693] (-) TimerEvent: {}
+[13.227627] (-) TimerEvent: {}
+[13.318864] (offboard_control) StdoutLine: {'line': b'[100%] Linking CXX executable simple_test_node\n'}
+[13.328647] (-) TimerEvent: {}
+[13.429851] (-) TimerEvent: {}
+[13.536652] (-) TimerEvent: {}
+[13.643729] (-) TimerEvent: {}
+[13.744654] (-) TimerEvent: {}
+[13.845627] (-) TimerEvent: {}
+[13.950605] (-) TimerEvent: {}
+[14.051636] (-) TimerEvent: {}
+[14.152631] (-) TimerEvent: {}
+[14.253651] (-) TimerEvent: {}
+[14.327984] (offboard_control) StdoutLine: {'line': b'[100%] Built target simple_test_node\n'}
+[14.354617] (-) TimerEvent: {}
+[14.388695] (offboard_control) CommandEnded: {'returncode': 0}
+[14.395498] (offboard_control) JobProgress: {'identifier': 'offboard_control', 'progress': 'install'}
+[14.435764] (offboard_control) Command: {'cmd': ['/usr/bin/cmake', '--install', '/home/workspace/build/offboard_control'], 'cwd': '/home/workspace/build/offboard_control', 'env': OrderedDict([('HOSTNAME', 'docker-desktop'), ('SHLVL', '0'), ('LD_LIBRARY_PATH', '/opt/ros/humble/opt/rviz_ogre_vendor/lib:/opt/ros/humble/lib/x86_64-linux-gnu:/opt/ros/humble/lib'), ('HOME', '/root'), ('OLDPWD', '/'), ('ROS_PYTHON_VERSION', '3'), ('ROS_DISTRO', 'humble'), ('_', '/usr/bin/colcon'), ('ROS_VERSION', '2'), ('ROS_LOCALHOST_ONLY', '0'), ('QT_X11_NO_MITSHM', '1'), ('PATH', '/opt/ros/humble/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'), ('DISPLAY', 'host.docker.internal:0'), ('LANG', 'C.UTF-8'), ('AMENT_PREFIX_PATH', '/opt/ros/humble'), ('PWD', '/home/workspace/build/offboard_control'), ('LC_ALL', 'C.UTF-8'), ('PYTHONPATH', '/opt/ros/humble/lib/python3.10/site-packages:/opt/ros/humble/local/lib/python3.10/dist-packages'), ('COLCON', '1'), ('CMAKE_PREFIX_PATH', '/opt/ros/humble')]), 'shell': False}
+[14.460108] (-) TimerEvent: {}
+[14.482452] (offboard_control) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[14.532900] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/lib/offboard_control/dummy_yaw_publisher\n'}
+[14.549316] (offboard_control) StdoutLine: {'line': b'-- Set runtime path of "/home/workspace/install/offboard_control/lib/offboard_control/dummy_yaw_publisher" to ""\n'}
+[14.549984] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/lib/offboard_control/simple_test_node\n'}
+[14.560606] (-) TimerEvent: {}
+[14.584115] (offboard_control) StdoutLine: {'line': b'-- Set runtime path of "/home/workspace/install/offboard_control/lib/offboard_control/simple_test_node" to ""\n'}
+[14.584695] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/launch\n'}
+[14.621159] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/launch/offboard_yaw_demo.launch.py\n'}
+[14.624778] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/launch/test_local_no_px4.launch.py\n'}
+[14.628757] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/launch/simple_test.launch.py\n'}
+[14.632621] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/launch/test_with_dummy.launch.py\n'}
+[14.662676] (-) TimerEvent: {}
+[14.668359] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/ament_index/resource_index/package_run_dependencies/offboard_control\n'}
+[14.682049] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/ament_index/resource_index/parent_prefix_path/offboard_control\n'}
+[14.695948] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/environment/ament_prefix_path.sh\n'}
+[14.699414] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/environment/ament_prefix_path.dsv\n'}
+[14.703137] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/environment/path.sh\n'}
+[14.706737] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/environment/path.dsv\n'}
+[14.710299] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/local_setup.bash\n'}
+[14.713873] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/local_setup.sh\n'}
+[14.717587] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/local_setup.zsh\n'}
+[14.721232] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/local_setup.dsv\n'}
+[14.724892] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/package.dsv\n'}
+[14.737311] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/ament_index/resource_index/packages/offboard_control\n'}
+[14.749084] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/cmake/offboard_controlConfig.cmake\n'}
+[14.752645] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/cmake/offboard_controlConfig-version.cmake\n'}
+[14.756246] (offboard_control) StdoutLine: {'line': b'-- Installing: /home/workspace/install/offboard_control/share/offboard_control/package.xml\n'}
+[14.763797] (-) TimerEvent: {}
+[14.765918] (offboard_control) CommandEnded: {'returncode': 0}
+[14.849501] (offboard_control) JobEnded: {'identifier': 'offboard_control', 'rc': 0}
+[14.853381] (-) EventReactorShutdown: {}

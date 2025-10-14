@@ -31,8 +31,8 @@
 -- Configuring done
 -- Generating done
 -- Build files have been written to: /home/workspace/build/offboard_control
-[ 50%] Building CXX object CMakeFiles/simple_test_node.dir/src/simple_test_node.cpp.o
 [ 50%] Building CXX object CMakeFiles/dummy_yaw_publisher.dir/src/dummy_yaw_publisher.cpp.o
+[ 50%] Building CXX object CMakeFiles/simple_test_node.dir/src/simple_test_node.cpp.o
 [ 75%] Linking CXX executable dummy_yaw_publisher
 [ 75%] Built target dummy_yaw_publisher
 [100%] Linking CXX executable simple_test_node
