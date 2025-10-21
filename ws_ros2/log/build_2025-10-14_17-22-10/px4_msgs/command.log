@@ -1,0 +1,6 @@
+Invoking command in '/home/eppl/ws_ros2/build/px4_msgs': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/eppl/ws_ros2/src/px4_msgs -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/eppl/ws_ros2/install/px4_msgs
+Invoked command in '/home/eppl/ws_ros2/build/px4_msgs' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake /home/eppl/ws_ros2/src/px4_msgs -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/eppl/ws_ros2/install/px4_msgs
+Invoking command in '/home/eppl/ws_ros2/build/px4_msgs': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/eppl/ws_ros2/build/px4_msgs -- -j32 -l32
+Invoked command in '/home/eppl/ws_ros2/build/px4_msgs' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --build /home/eppl/ws_ros2/build/px4_msgs -- -j32 -l32
+Invoking command in '/home/eppl/ws_ros2/build/px4_msgs': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/eppl/ws_ros2/build/px4_msgs
+Invoked command in '/home/eppl/ws_ros2/build/px4_msgs' returned '0': CMAKE_PREFIX_PATH=/opt/ros/humble /usr/bin/cmake --install /home/eppl/ws_ros2/build/px4_msgs

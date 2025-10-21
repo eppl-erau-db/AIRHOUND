@@ -1,0 +1,139 @@
+[0.005s] Invoking command in '/home/eppl/ws_ros2/build/px4_ros_com': AMENT_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:/opt/ros/humble LD_LIBRARY_PATH=/home/eppl/ws_ros2/install/px4_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/eppl/ws_ros2/install/px4_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake /home/eppl/ws_ros2/src/px4_ros_com -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/eppl/ws_ros2/install/px4_ros_com
+[0.031s] -- The C compiler identification is GNU 11.4.0
+[0.058s] -- The CXX compiler identification is GNU 11.4.0
+[0.061s] -- Detecting C compiler ABI info
+[0.098s] -- Detecting C compiler ABI info - done
+[0.101s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.102s] -- Detecting C compile features
+[0.102s] -- Detecting C compile features - done
+[0.104s] -- Detecting CXX compiler ABI info
+[0.143s] -- Detecting CXX compiler ABI info - done
+[0.147s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.147s] -- Detecting CXX compile features
+[0.147s] -- Detecting CXX compile features - done
+[0.148s] -- Found ament_cmake: 1.3.12 (/opt/ros/humble/share/ament_cmake/cmake)
+[0.322s] -- Found Python3: /usr/bin/python3 (found version "3.10.12") found components: Interpreter 
+[0.353s] -- Override CMake install command with custom implementation using symlinks instead of copying resources
+[0.364s] -- Found builtin_interfaces: 1.2.2 (/opt/ros/humble/share/builtin_interfaces/cmake)
+[0.378s] -- Found rosidl_generator_c: 3.1.7 (/opt/ros/humble/share/rosidl_generator_c/cmake)
+[0.380s] -- Found rosidl_adapter: 3.1.7 (/opt/ros/humble/share/rosidl_adapter/cmake)
+[0.384s] -- Found rosidl_generator_cpp: 3.1.7 (/opt/ros/humble/share/rosidl_generator_cpp/cmake)
+[0.389s] -- Using all available rosidl_typesupport_c: rosidl_typesupport_fastrtps_c;rosidl_typesupport_introspection_c
+[0.395s] -- Using all available rosidl_typesupport_cpp: rosidl_typesupport_fastrtps_cpp;rosidl_typesupport_introspection_cpp
+[0.401s] -- Found eigen3_cmake_module: 0.1.1 (/opt/ros/humble/share/eigen3_cmake_module/cmake)
+[0.405s] -- Found Eigen3: TRUE (found version "3.4.0") 
+[0.405s] -- Found geometry_msgs: 4.9.0 (/opt/ros/humble/share/geometry_msgs/cmake)
+[0.417s] -- Found px4_msgs: 2.0.1 (/home/eppl/ws_ros2/install/px4_msgs/share/px4_msgs/cmake)
+[0.423s] -- Found rclcpp: 16.0.15 (/opt/ros/humble/share/rclcpp/cmake)
+[0.439s] -- Found rmw_implementation_cmake: 6.1.2 (/opt/ros/humble/share/rmw_implementation_cmake/cmake)
+[0.440s] -- Found rmw_fastrtps_cpp: 6.2.8 (/opt/ros/humble/share/rmw_fastrtps_cpp/cmake)
+[0.485s] -- Found OpenSSL: /usr/lib/x86_64-linux-gnu/libcrypto.so (found version "3.0.2")  
+[0.499s] -- Found FastRTPS: /opt/ros/humble/include  
+[0.521s] -- Using RMW implementation 'rmw_fastrtps_cpp' as default
+[0.524s] -- Looking for pthread.h
+[0.560s] -- Looking for pthread.h - found
+[0.560s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+[0.601s] -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+[0.602s] -- Found Threads: TRUE  
+[0.618s] -- Found sensor_msgs: 4.9.0 (/opt/ros/humble/share/sensor_msgs/cmake)
+[0.625s] -- Found rclpy: 3.3.17 (/opt/ros/humble/share/rclpy/cmake)
+[0.630s] -- Found ament_lint_auto: 0.12.14 (/opt/ros/humble/share/ament_lint_auto/cmake)
+[0.681s] -- Added test 'copyright' to check source files copyright and LICENSE
+[0.682s] -- Added test 'cppcheck' to perform static code analysis on C / C++ code
+[0.683s] -- Configured cppcheck include dirs: /home/eppl/ws_ros2/src/px4_ros_com/include;$<BUILD_INTERFACE:/home/eppl/ws_ros2/src/px4_ros_com/include/px4_ros_com>
+[0.683s] -- Configured cppcheck exclude dirs and/or files: 
+[0.684s] -- Added test 'cpplint' to check C / C++ code against the Google style
+[0.684s] -- Configured cpplint exclude dirs and/or files: 
+[0.684s] -- Added test 'flake8' to check Python code syntax and style conventions
+[0.685s] -- Added test 'lint_cmake' to check CMake code style
+[0.685s] -- Added test 'pep257' to check Python code against some of the docstring style conventions in PEP 257
+[0.686s] -- Added test 'uncrustify' to check C / C++ code style
+[0.686s] -- Configured uncrustify additional arguments: 
+[0.687s] -- Added test 'xmllint' to check XML markup files
+[0.688s] -- Configuring done
+[0.697s] -- Generating done
+[0.701s] -- Build files have been written to: /home/eppl/ws_ros2/build/px4_ros_com
+[0.706s] Invoked command in '/home/eppl/ws_ros2/build/px4_ros_com' returned '0': AMENT_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:/opt/ros/humble LD_LIBRARY_PATH=/home/eppl/ws_ros2/install/px4_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/eppl/ws_ros2/install/px4_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake /home/eppl/ws_ros2/src/px4_ros_com -DAMENT_CMAKE_SYMLINK_INSTALL=1 -DCMAKE_INSTALL_PREFIX=/home/eppl/ws_ros2/install/px4_ros_com
+[0.707s] Invoking command in '/home/eppl/ws_ros2/build/px4_ros_com': AMENT_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:/opt/ros/humble LD_LIBRARY_PATH=/home/eppl/ws_ros2/install/px4_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/eppl/ws_ros2/install/px4_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --build /home/eppl/ws_ros2/build/px4_ros_com -- -j32 -l32
+[0.734s] [  8%] [32mBuilding CXX object CMakeFiles/sensor_combined_listener.dir/src/examples/listeners/sensor_combined_listener.cpp.o[0m
+[0.735s] [ 16%] [32mBuilding CXX object CMakeFiles/offboard_control.dir/src/examples/offboard/offboard_control.cpp.o[0m
+[0.736s] [ 25%] [32mBuilding CXX object CMakeFiles/frame_transforms.dir/src/lib/frame_transforms.cpp.o[0m
+[0.736s] [ 41%] [32mBuilding CXX object CMakeFiles/debug_vect_advertiser.dir/src/examples/advertisers/debug_vect_advertiser.cpp.o[0m
+[0.736s] [ 41%] [32mBuilding CXX object CMakeFiles/vehicle_gps_position_listener.dir/src/examples/listeners/vehicle_gps_position_listener.cpp.o[0m
+[0.736s] [ 50%] [32mBuilding CXX object CMakeFiles/offboard_control_srv.dir/src/examples/offboard/offboard_control_srv.cpp.o[0m
+[0.740s] [ 50%] Built target ament_cmake_python_symlink_px4_ros_com
+[0.864s] running egg_info
+[0.871s] creating px4_ros_com.egg-info
+[0.871s] writing px4_ros_com.egg-info/PKG-INFO
+[0.871s] writing dependency_links to px4_ros_com.egg-info/dependency_links.txt
+[0.871s] writing top-level names to px4_ros_com.egg-info/top_level.txt
+[0.871s] writing manifest file 'px4_ros_com.egg-info/SOURCES.txt'
+[0.891s] reading manifest file 'px4_ros_com.egg-info/SOURCES.txt'
+[0.892s] writing manifest file 'px4_ros_com.egg-info/SOURCES.txt'
+[0.907s] [ 50%] Built target ament_cmake_python_build_px4_ros_com_egg
+[2.801s] [ 58%] [32m[1mLinking CXX executable debug_vect_advertiser[0m
+[2.899s] [ 58%] Built target debug_vect_advertiser
+[3.109s] [ 66%] [32m[1mLinking CXX executable offboard_control[0m
+[3.215s] [ 66%] Built target offboard_control
+[3.516s] [ 75%] [32m[1mLinking CXX executable offboard_control_srv[0m
+[3.626s] [ 75%] Built target offboard_control_srv
+[3.939s] [ 83%] [32m[1mLinking CXX shared library libframe_transforms.so[0m
+[4.056s] [ 83%] Built target frame_transforms
+[4.539s] [ 91%] [32m[1mLinking CXX executable sensor_combined_listener[0m
+[4.605s] [100%] [32m[1mLinking CXX executable vehicle_gps_position_listener[0m
+[4.710s] [100%] Built target sensor_combined_listener
+[4.773s] [100%] Built target vehicle_gps_position_listener
+[4.778s] Invoked command in '/home/eppl/ws_ros2/build/px4_ros_com' returned '0': AMENT_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:/opt/ros/humble LD_LIBRARY_PATH=/home/eppl/ws_ros2/install/px4_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/eppl/ws_ros2/install/px4_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --build /home/eppl/ws_ros2/build/px4_ros_com -- -j32 -l32
+[4.779s] Invoking command in '/home/eppl/ws_ros2/build/px4_ros_com': AMENT_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:/opt/ros/humble LD_LIBRARY_PATH=/home/eppl/ws_ros2/install/px4_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/eppl/ws_ros2/install/px4_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --install /home/eppl/ws_ros2/build/px4_ros_com
+[4.783s] -- Install configuration: ""
+[4.783s] -- Execute custom install script
+[4.783s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/lib/px4_ros_com/sensor_combined_listener
+[4.787s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/lib/px4_ros_com/vehicle_gps_position_listener
+[4.791s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/lib/px4_ros_com/debug_vect_advertiser
+[4.794s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/lib/px4_ros_com/offboard_control
+[4.797s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/lib/px4_ros_com/offboard_control_srv
+[4.801s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/environment/library_path.sh
+[4.805s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/environment/library_path.dsv
+[4.809s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/include/px4_ros_com/frame_transforms.h
+[4.814s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com//launch/offboard_control_launch.yaml
+[4.817s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com//launch/sensor_combined_listener.launch.py
+[4.821s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com//test/__init__.py
+[4.825s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com//test/pipeline_io_test.py
+[4.828s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com//test/test_input.py
+[4.832s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com//test/test_output.py
+[4.835s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/environment/pythonpath.sh
+[4.839s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/environment/pythonpath.dsv
+[4.844s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/local/lib/python3.10/dist-packages/px4_ros_com-0.1.0-py3.10.egg-info/PKG-INFO
+[4.847s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/local/lib/python3.10/dist-packages/px4_ros_com-0.1.0-py3.10.egg-info/SOURCES.txt
+[4.851s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/local/lib/python3.10/dist-packages/px4_ros_com-0.1.0-py3.10.egg-info/dependency_links.txt
+[4.855s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/local/lib/python3.10/dist-packages/px4_ros_com-0.1.0-py3.10.egg-info/top_level.txt
+[4.860s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/local/lib/python3.10/dist-packages/px4_ros_com/__init__.py
+[4.863s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/local/lib/python3.10/dist-packages/px4_ros_com/module_to_import.py
+[4.867s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/lib/px4_ros_com/offboard_control.py
+[4.872s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/ament_index/resource_index/package_run_dependencies/px4_ros_com
+[4.875s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/ament_index/resource_index/parent_prefix_path/px4_ros_com
+[4.879s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/environment/ament_prefix_path.sh
+[4.883s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/environment/ament_prefix_path.dsv
+[4.886s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/environment/path.sh
+[4.890s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/environment/path.dsv
+[4.893s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/local_setup.bash
+[4.897s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/local_setup.sh
+[4.901s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/local_setup.zsh
+[4.905s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/local_setup.dsv
+[4.910s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/package.dsv
+[4.914s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/ament_index/resource_index/packages/px4_ros_com
+[4.918s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/cmake/ament_cmake_export_dependencies-extras.cmake
+[4.921s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/cmake/ament_cmake_export_targets-extras.cmake
+[4.925s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/cmake/ament_cmake_export_include_directories-extras.cmake
+[4.928s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/cmake/ament_cmake_export_libraries-extras.cmake
+[4.932s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/cmake/px4_ros_comConfig.cmake
+[4.935s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/cmake/px4_ros_comConfig-version.cmake
+[4.940s] -- Symlinking: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/package.xml
+[4.945s] -- Installing: /home/eppl/ws_ros2/install/px4_ros_com/lib/libframe_transforms.so
+[4.946s] -- Set runtime path of "/home/eppl/ws_ros2/install/px4_ros_com/lib/libframe_transforms.so" to ""
+[4.964s] Listing '/home/eppl/ws_ros2/install/px4_ros_com/local/lib/python3.10/dist-packages/px4_ros_com'...
+[4.964s] Compiling '/home/eppl/ws_ros2/install/px4_ros_com/local/lib/python3.10/dist-packages/px4_ros_com/__init__.py'...
+[4.964s] Compiling '/home/eppl/ws_ros2/install/px4_ros_com/local/lib/python3.10/dist-packages/px4_ros_com/module_to_import.py'...
+[4.966s] -- Installing: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/cmake/export_frame_transformsExport.cmake
+[4.966s] -- Installing: /home/eppl/ws_ros2/install/px4_ros_com/share/px4_ros_com/cmake/export_frame_transformsExport-noconfig.cmake
+[4.967s] Invoked command in '/home/eppl/ws_ros2/build/px4_ros_com' returned '0': AMENT_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:${AMENT_PREFIX_PATH} CMAKE_PREFIX_PATH=/home/eppl/ws_ros2/install/px4_msgs:/opt/ros/humble LD_LIBRARY_PATH=/home/eppl/ws_ros2/install/px4_msgs/lib:${LD_LIBRARY_PATH} PYTHONPATH=/home/eppl/ws_ros2/install/px4_msgs/local/lib/python3.10/dist-packages:${PYTHONPATH} /usr/bin/cmake --install /home/eppl/ws_ros2/build/px4_ros_com
