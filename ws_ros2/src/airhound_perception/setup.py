@@ -15,6 +15,7 @@ setup(
                 "launch/perception.launch.py",
                 "launch/system.launch.py",
                 "launch/synthetic_test.launch.py",
+                "launch/sim_test.launch.py",
                 "launch/record_bag.launch.py",
             ],
         ),
@@ -26,7 +27,10 @@ setup(
         ),
         ("share/" + package_name + "/config", ["config/perception.yaml"]),
     ],
-    install_requires=["setuptools", "ultralytics>=8.0.0"],
+    install_requires=["setuptools", "numpy>=1.24,<2.0"],
+    extras_require={
+        "yolo": ["ultralytics>=8.0.0"],  # Only needed for real YOLO detection
+    },
     zip_safe=True,
     maintainer="Rylan",
     maintainer_email="rylan@example.com",
@@ -37,6 +41,7 @@ setup(
         "console_scripts": [
             "detector_node = airhound_perception.detector_node:main",
             "synthetic_camera = airhound_perception.synthetic_camera:main",
+            "mock_detector = airhound_perception.mock_detector:main",
         ],
     },
 )
