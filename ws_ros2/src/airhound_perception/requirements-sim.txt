@@ -1,0 +1,23 @@
+# AIRHOUND Perception - Simulation Testing Requirements
+#
+# This file contains ONLY the dependencies needed for simulation testing
+# with the mock detector (no camera, no YOLO).
+#
+# Install with:
+#   pip install -r requirements-sim.txt
+#
+# OR for system-wide:
+#   pip3 install -r requirements-sim.txt
+#
+# Note: ROS 2 packages (rclpy, vision_msgs, etc.) are installed via apt,
+#       not pip. This file only covers Python packages.
+
+# Required for all modes (numpy is used by mock detector for math operations)
+numpy>=1.24,<2.0
+
+# That's it! Mock detector only needs:
+# - Standard library (time, math)
+# - ROS 2 packages (installed via apt, not pip)
+# - NumPy (for random noise generation)
+#
+# For REAL perception testing, see requirements.txt instead.
