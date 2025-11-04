@@ -1,4 +1,4 @@
-#import rclpy
+import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo
 from vision_msgs.msg import Detection2DArray
@@ -28,7 +28,7 @@ class YawErrorNode(Node):
         self.create_subscription(Detection2DArray, '/detections', self.detection_callback, 10)
 
         # Publisher
-        self.pub_yaw = self.create_publisher(Float32, '/target_yaw_rate', 10)
+        self.pub_yaw = self.create_publisher(Float32, '/target_yaw', 10)
 
         # TF2 for camera → body frame (optional)
         self.tf_buffer = tf2_ros.Buffer()
