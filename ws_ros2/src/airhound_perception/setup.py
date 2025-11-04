@@ -36,7 +36,6 @@ setup(
     maintainer_email="rylan@example.com",
     description="ROS 2 perception node for AIRHOUND.",
     license="MIT",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "detector_node = airhound_perception.detector_node:main",
