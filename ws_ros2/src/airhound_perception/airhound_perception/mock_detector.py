@@ -211,9 +211,8 @@ class MockDetectorNode(Node):
 
         # Create bounding box
         bbox = BoundingBox2D()
-        bbox.center = Pose2D()
-        bbox.center.x = center_x
-        bbox.center.y = center_y
+        bbox.center.position.x = center_x
+        bbox.center.position.y = center_y
         bbox.center.theta = 0.0  # No rotation
         bbox.size_x = float(self.target_width)
         bbox.size_y = float(self.target_height)
