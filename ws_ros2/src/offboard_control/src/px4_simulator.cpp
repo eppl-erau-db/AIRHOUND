@@ -12,7 +12,7 @@ using namespace std::chrono_literals;
 class Px4Simulator : public rclcpp::Node {
 public:
     Px4Simulator() : Node("px4_simulator") {
-        rmw_qos_profile_t qos_profile = rmw_get_qos_profile_services_default();
+        rmw_qos_profile_t qos_profile = rmw_qos_profile_services_default;
         qos_profile.reliability = RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
 
         subscription_offboard_control_mode_ = this->create_subscription<px4_msgs::msg::OffboardControlMode>(
