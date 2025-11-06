@@ -56,7 +56,7 @@ class YawErrorNode(Node):
 
         if len(msg.detections) > 0 and None not in (self.fx, self.fy, self.cx, self.cy):
             # Pick detection with highest confidence
-            detection = max(msg.detections, key=lambda d: d.results[0].score)
+            detection = max(msg.detections, key=lambda d: d.results[0].hypothesis.score)
             u = detection.bbox.center.position.x
             v = detection.bbox.center.position.y
 
