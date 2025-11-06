@@ -1,0 +1,38 @@
+[1.289s] Invoking command in '/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/src/Tracking-Geometry': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/lib/python3.12/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/Tracking-Geometry build --build-base /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/build install --record /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/install.log --single-version-externally-managed install_data
+[1.616s] running egg_info
+[1.616s] creating ../../build/Tracking-Geometry/Tracking_Geometry.egg-info
+[1.633s] writing ../../build/Tracking-Geometry/Tracking_Geometry.egg-info/PKG-INFO
+[1.633s] writing dependency_links to ../../build/Tracking-Geometry/Tracking_Geometry.egg-info/dependency_links.txt
+[1.633s] writing entry points to ../../build/Tracking-Geometry/Tracking_Geometry.egg-info/entry_points.txt
+[1.634s] writing requirements to ../../build/Tracking-Geometry/Tracking_Geometry.egg-info/requires.txt
+[1.634s] writing top-level names to ../../build/Tracking-Geometry/Tracking_Geometry.egg-info/top_level.txt
+[1.634s] writing manifest file '../../build/Tracking-Geometry/Tracking_Geometry.egg-info/SOURCES.txt'
+[1.669s] reading manifest file '../../build/Tracking-Geometry/Tracking_Geometry.egg-info/SOURCES.txt'
+[1.670s] writing manifest file '../../build/Tracking-Geometry/Tracking_Geometry.egg-info/SOURCES.txt'
+[1.670s] running build
+[1.670s] running build_py
+[1.671s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/build
+[1.671s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/build/lib
+[1.671s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/build/lib/tracking_geometry
+[1.671s] copying tracking_geometry/tracking.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/build/lib/tracking_geometry
+[1.671s] copying tracking_geometry/__init__.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/build/lib/tracking_geometry
+[1.672s] running install
+[1.681s] running install_lib
+[1.698s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/lib/python3.12/site-packages/tracking_geometry
+[1.698s] copying /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/build/lib/tracking_geometry/tracking.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/lib/python3.12/site-packages/tracking_geometry
+[1.699s] copying /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/build/lib/tracking_geometry/__init__.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/lib/python3.12/site-packages/tracking_geometry
+[1.699s] byte-compiling /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/lib/python3.12/site-packages/tracking_geometry/tracking.py to tracking.cpython-312.pyc
+[1.701s] byte-compiling /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/lib/python3.12/site-packages/tracking_geometry/__init__.py to __init__.cpython-312.pyc
+[1.702s] running install_data
+[1.702s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/share/ament_index
+[1.702s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/share/ament_index/resource_index
+[1.702s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/share/ament_index/resource_index/packages
+[1.703s] copying resource/Tracking-Geometry -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/share/ament_index/resource_index/packages
+[1.703s] copying package.xml -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/share/Tracking-Geometry
+[1.703s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/share/Tracking-Geometry/launch
+[1.703s] copying launch/tracking.launch.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/share/Tracking-Geometry/launch
+[1.703s] running install_egg_info
+[1.721s] Copying ../../build/Tracking-Geometry/Tracking_Geometry.egg-info to /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/lib/python3.12/site-packages/Tracking_Geometry-0.0.0-py3.12.egg-info
+[1.722s] running install_scripts
+[1.859s] Installing tracking_node script to /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/Tracking-Geometry/lib/Tracking-Geometry
+[1.860s] writing list of installed files to '/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/Tracking-Geometry/install.log'

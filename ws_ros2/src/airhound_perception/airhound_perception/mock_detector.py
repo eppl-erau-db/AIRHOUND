@@ -21,6 +21,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile
 
 from std_msgs.msg import Float32
+from sensor_msgs.msg import CameraInfo
 from vision_msgs.msg import (
     Detection2DArray,
     Detection2D,
@@ -124,6 +125,9 @@ class MockDetectorNode(Node):
         qos_default = QoSProfile(depth=10)
         self.det_pub = self.create_publisher(Detection2DArray, det_topic, qos_default)
         self.fps_pub = self.create_publisher(Float32, "/perception/fps", qos_default)
+        self.camera_info_pub = self.create_publisher(
+            CameraInfo, "/camera/camera_info", qos_default
+        )
 
         # State
         self.start_time = time.time()
@@ -233,6 +237,27 @@ class MockDetectorNode(Node):
         """Publish mock detections at configured rate"""
 
         now = self.get_clock().now()
+
+        # Publish camera info
+        camera_info = CameraInfo()
+        camera_info.header.stamp = now.to_msg()
+        camera_info.header.frame_id = self.frame_id
+        camera_info.width = self.image_width
+        camera_info.height = self.image_height
+
+        # Set realistic camera intrinsics (Intel RealSense D435i approximation)
+        # fx, fy ~= 615 pixels for 1280x720 @ 69° HFOV
+        fx = 615.0
+        fy = 615.0
+        cx = self.image_width / 2.0
+        cy = self.image_height / 2.0
+
+        camera_info.k = [fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0]
+        camera_info.d = [0.0, 0.0, 0.0, 0.0, 0.0]  # No distortion
+        camera_info.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]  # Identity
+        camera_info.p = [fx, 0.0, cx, 0.0, 0.0, fy, cy, 0.0, 0.0, 0.0, 1.0, 0.0]
+
+        self.camera_info_pub.publish(camera_info)
 
         # Create detection array
         det_array = Detection2DArray()

@@ -1,0 +1,53 @@
+[0.834s] Invoking command in '/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/src/airhound_perception': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/airhound_perception build --build-base /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build install --record /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/install.log --single-version-externally-managed install_data
+[1.039s] running egg_info
+[1.039s] creating ../../build/airhound_perception/airhound_perception.egg-info
+[1.049s] writing ../../build/airhound_perception/airhound_perception.egg-info/PKG-INFO
+[1.049s] writing dependency_links to ../../build/airhound_perception/airhound_perception.egg-info/dependency_links.txt
+[1.050s] writing entry points to ../../build/airhound_perception/airhound_perception.egg-info/entry_points.txt
+[1.050s] writing requirements to ../../build/airhound_perception/airhound_perception.egg-info/requires.txt
+[1.050s] writing top-level names to ../../build/airhound_perception/airhound_perception.egg-info/top_level.txt
+[1.050s] writing manifest file '../../build/airhound_perception/airhound_perception.egg-info/SOURCES.txt'
+[1.072s] reading manifest file '../../build/airhound_perception/airhound_perception.egg-info/SOURCES.txt'
+[1.073s] writing manifest file '../../build/airhound_perception/airhound_perception.egg-info/SOURCES.txt'
+[1.073s] running build
+[1.073s] running build_py
+[1.073s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build
+[1.073s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build/lib
+[1.073s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build/lib/airhound_perception
+[1.074s] copying airhound_perception/yolo_detector.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build/lib/airhound_perception
+[1.074s] copying airhound_perception/synthetic_camera.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build/lib/airhound_perception
+[1.074s] copying airhound_perception/detector_node.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build/lib/airhound_perception
+[1.074s] copying airhound_perception/__init__.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build/lib/airhound_perception
+[1.074s] running install
+[1.081s] running install_lib
+[1.092s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception
+[1.092s] copying /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build/lib/airhound_perception/yolo_detector.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception
+[1.092s] copying /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build/lib/airhound_perception/synthetic_camera.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception
+[1.092s] copying /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build/lib/airhound_perception/detector_node.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception
+[1.093s] copying /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build/lib/airhound_perception/__init__.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception
+[1.093s] byte-compiling /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception/yolo_detector.py to yolo_detector.cpython-312.pyc
+[1.095s] byte-compiling /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception/synthetic_camera.py to synthetic_camera.cpython-312.pyc
+[1.097s] byte-compiling /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception/detector_node.py to detector_node.cpython-312.pyc
+[1.099s] byte-compiling /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception/__init__.py to __init__.cpython-312.pyc
+[1.099s] running install_data
+[1.100s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/ament_index
+[1.100s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/ament_index/resource_index
+[1.100s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/ament_index/resource_index/packages
+[1.100s] copying resource/airhound_perception -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/ament_index/resource_index/packages
+[1.100s] copying package.xml -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/airhound_perception
+[1.100s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/airhound_perception/launch
+[1.101s] copying launch/perception.launch.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/airhound_perception/launch
+[1.101s] copying launch/system.launch.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/airhound_perception/launch
+[1.101s] copying launch/synthetic_test.launch.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/airhound_perception/launch
+[1.101s] copying launch/record_bag.launch.py -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/airhound_perception/launch
+[1.101s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/airhound_perception/env_hook
+[1.101s] copying env_hook/airhound_perception_env.sh -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/airhound_perception/env_hook
+[1.101s] creating /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/airhound_perception/config
+[1.101s] copying config/perception.yaml -> /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/share/airhound_perception/config
+[1.101s] running install_egg_info
+[1.114s] Copying ../../build/airhound_perception/airhound_perception.egg-info to /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception-0.0.1-py3.12.egg-info
+[1.114s] running install_scripts
+[1.198s] Installing detector_node script to /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/airhound_perception
+[1.198s] Installing synthetic_camera script to /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/airhound_perception
+[1.198s] writing list of installed files to '/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/install.log'
+[1.222s] Invoked command in '/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/src/airhound_perception' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/airhound_perception build --build-base /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build install --record /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/install.log --single-version-externally-managed install_data

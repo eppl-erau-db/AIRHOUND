@@ -1,0 +1,2 @@
+[console_scripts]
+tracking_node = tracking_geometry.tracking:main

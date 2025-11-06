@@ -1,0 +1,26 @@
+# perception.yaml (production configuration)
+# This is the production / high‑resolution parameter set for the perception node.
+# Differences from perception_dev.yaml:
+#   - Higher imgsz (1280) for better detection fidelity (slower FPS)
+#   - Intended for final validation / camera integration
+# Usage notes:
+#   - Launch files default to this file; override with: params_file:=/path/to/perception_dev.yaml
+#   - If TensorRT engine is missing, either:
+#       * Run the recovery script with --engine, or
+#       * Change model_path back to the .pt weights (slower).
+#   - Ensure the node name 'perception_node' matches this top-level key.
+perception_node:
+  ros__parameters:
+    input_image_topic: "/camera/color/image_raw"
+    output_detections_topic: "/detections"
+    frame_id: "camera_color_optical_frame"
+    publish_rate_hz: 30.0
+    use_compressed: false
+    camera_info_topic: "/camera/camera_info"
+    # Adjust model path to your deployed artifact (engine, onnx, or pt). Default to repo weight.
+    model_path: "models/yolov8Detector.engine"
+    # Inference resolution (production). Use 640 in perception_dev.yaml for faster iteration.
+    imgsz: 1280
+    conf: 0.25
+    iou: 0.45
+    device: "0"

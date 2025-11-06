@@ -1,0 +1,8 @@
+Metadata-Version: 2.1
+Name: Tracking-Geometry
+Version: 0.0.0
+Summary: Tracking and geometry node - converts detections to yaw commands
+Maintainer: castej
+Maintainer-email: castej@todo.todo
+License: TODO: License declaration
+Provides-Extra: test

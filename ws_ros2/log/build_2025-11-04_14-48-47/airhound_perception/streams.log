@@ -1,0 +1,23 @@
+[1.032s] Invoking command in '/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/src/airhound_perception': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/airhound_perception build --build-base /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build install --record /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/install.log --single-version-externally-managed install_data
+[1.319s] running egg_info
+[1.333s] writing ../../build/airhound_perception/airhound_perception.egg-info/PKG-INFO
+[1.334s] writing dependency_links to ../../build/airhound_perception/airhound_perception.egg-info/dependency_links.txt
+[1.334s] writing entry points to ../../build/airhound_perception/airhound_perception.egg-info/entry_points.txt
+[1.334s] writing requirements to ../../build/airhound_perception/airhound_perception.egg-info/requires.txt
+[1.334s] writing top-level names to ../../build/airhound_perception/airhound_perception.egg-info/top_level.txt
+[1.364s] reading manifest file '../../build/airhound_perception/airhound_perception.egg-info/SOURCES.txt'
+[1.366s] writing manifest file '../../build/airhound_perception/airhound_perception.egg-info/SOURCES.txt'
+[1.367s] running build
+[1.367s] running build_py
+[1.367s] running install
+[1.376s] running install_lib
+[1.392s] running install_data
+[1.392s] running install_egg_info
+[1.410s] removing '/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception-0.0.1-py3.12.egg-info' (and everything under it)
+[1.411s] Copying ../../build/airhound_perception/airhound_perception.egg-info to /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages/airhound_perception-0.0.1-py3.12.egg-info
+[1.412s] running install_scripts
+[1.533s] Installing detector_node script to /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/airhound_perception
+[1.534s] Installing mock_detector script to /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/airhound_perception
+[1.534s] Installing synthetic_camera script to /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/airhound_perception
+[1.534s] writing list of installed files to '/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/install.log'
+[1.570s] Invoked command in '/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/src/airhound_perception' returned '0': DEBUGINFOD_URLS=https://debuginfod.ubuntu.com PYTHONPATH=/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/install/airhound_perception/lib/python3.12/site-packages: /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/airhound_perception build --build-base /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/build install --record /home/rylan/Documents/school/EPPL/simulation_workspace/AIRHOUND/ws_ros2/build/airhound_perception/install.log --single-version-externally-managed install_data
