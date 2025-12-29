@@ -1,0 +1,132 @@
+# =============================================================================
+# AIRHOUND Configuration
+# =============================================================================
+# Unified configuration for E2E drone tracking pipeline
+# All tunable parameters in one place
+#
+# Usage:
+#   ./launch_airhound.sh sim                    # Uses this config
+#   ./launch_airhound.sh sim --config my.yaml   # Uses custom config
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Mode Selection
+# -----------------------------------------------------------------------------
+# "sim"    - Use mock detector (no camera, no YOLO, for SITL testing)
+# "flight" - Use real perception (RealSense camera + YOLO detection)
+mode: "sim"
+
+# -----------------------------------------------------------------------------
+# Mock Detector Settings (only used in sim mode)
+# -----------------------------------------------------------------------------
+# Generates synthetic detections for testing control algorithms
+mock_detector:
+  # Target motion
+  moving_target: true
+  motion_type: "circular"    # circular, sinusoidal, figure8, static
+  motion_radius: 200.0       # pixels from center
+  motion_speed: 0.5          # rad/s (for circular/figure8) or Hz (sinusoidal)
+  
+  # Publish rate
+  publish_rate_hz: 30.0      # Detection publish rate
+  
+  # Simulated image size (should match real camera for consistent behavior)
+  image_width: 1280
+  image_height: 720
+  
+  # Target appearance
+  target_width: 120          # Bounding box width in pixels
+  target_height: 80          # Bounding box height in pixels
+  confidence: 0.85           # Detection confidence score
+  class_id: "drone"          # Detection class label
+  
+  # Multi-target and noise
+  num_targets: 1             # Number of simulated targets
+  add_noise: false           # Add random noise to positions
+  noise_std: 5.0             # Pixel noise standard deviation
+
+# -----------------------------------------------------------------------------
+# Perception Settings (only used in flight mode)
+# -----------------------------------------------------------------------------
+# Real YOLO-based object detection
+perception:
+  # Model configuration
+  model_path: "models/yolov8Detector.engine"  # TensorRT engine path
+  
+  # Inference settings
+  image_width: 1280
+  image_height: 720
+  confidence_threshold: 0.25
+  iou_threshold: 0.45
+  
+  # Device selection
+  device: "0"                # GPU device ID, or "cpu" for CPU inference
+  
+  # Topic configuration
+  input_image_topic: "/camera/color/image_raw"
+  output_detections_topic: "/detections"
+
+# -----------------------------------------------------------------------------
+# Camera Settings (only used in flight mode)
+# -----------------------------------------------------------------------------
+camera:
+  # Intel RealSense D455 settings
+  serial_number: ""          # Empty = use first available camera
+  rgb_width: 1280
+  rgb_height: 720
+  rgb_fps: 30
+  enable_depth: false        # Depth not needed for yaw tracking
+  enable_imu: false
+
+# -----------------------------------------------------------------------------
+# Tracking Settings
+# -----------------------------------------------------------------------------
+# Converts detections to yaw commands
+tracking:
+  # Yaw rate limits
+  max_rate: 1.0              # Maximum yaw rate command (rad/s)
+  deadband: 0.01             # Below this threshold, no command sent (rad)
+  
+  # Target selection (when multiple detections)
+  # Currently uses highest confidence detection
+
+# -----------------------------------------------------------------------------
+# PX4 Offboard Control Settings
+# -----------------------------------------------------------------------------
+px4:
+  # Arming behavior
+  auto_arm: true             # Automatically arm and enter offboard mode
+  
+  # Control rates
+  publish_rate: 10.0         # Offboard control message rate (Hz)
+                             # Must be > 2 Hz to maintain offboard mode
+  
+  # Safety
+  safety_timeout: 5.0        # Seconds without yaw command before stopping
+  
+  # Hover position (NED frame: x=North, y=East, z=Down)
+  hover_position:
+    x: 0.0                   # meters North
+    y: 0.0                   # meters East  
+    z: -5.0                  # meters Down (negative = altitude above ground)
+
+# -----------------------------------------------------------------------------
+# MicroXRCE-DDS Agent Settings
+# -----------------------------------------------------------------------------
+# Bridge between ROS2 DDS and PX4's uXRCE-DDS client
+agent:
+  port: 8888                 # UDP port for PX4 connection
+  protocol: "udp4"           # Protocol (udp4, udp6, tcp4, tcp6)
+
+# -----------------------------------------------------------------------------
+# PX4 SITL Settings (only used in sim mode)
+# -----------------------------------------------------------------------------
+sitl:
+  # PX4 installation path (~ expands to home directory)
+  px4_path: "~/PX4-Autopilot"
+  
+  # Gazebo target (make target for PX4)
+  gazebo_target: "gz_x500"   # Options: gz_x500, gz_x500_depth, etc.
+  
+  # Headless mode (no Gazebo GUI)
+  headless: false

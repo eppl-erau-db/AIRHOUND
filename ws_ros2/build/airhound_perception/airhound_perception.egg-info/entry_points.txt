@@ -1,4 +1,0 @@
-[console_scripts]
-detector_node = airhound_perception.detector_node:main
-mock_detector = airhound_perception.mock_detector:main
-synthetic_camera = airhound_perception.synthetic_camera:main

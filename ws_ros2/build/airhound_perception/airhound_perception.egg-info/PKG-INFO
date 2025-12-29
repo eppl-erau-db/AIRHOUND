@@ -1,8 +1,0 @@
-Metadata-Version: 2.1
-Name: airhound-perception
-Version: 0.0.1
-Summary: ROS 2 perception node for AIRHOUND.
-Maintainer: Rylan
-Maintainer-email: rylan@example.com
-License: MIT
-Provides-Extra: yolo
