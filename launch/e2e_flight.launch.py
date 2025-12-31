@@ -4,21 +4,26 @@ AIRHOUND E2E Flight Launch File
 
 Launches the complete end-to-end pipeline for real flight:
   1. RealSense Camera - Intel RealSense D455 RGB camera
-  2. Detector Node - YOLOv8/TensorRT object detection
+  2. Detector Node - YOLO or RF-DETR object detection
   3. Tracking Node - Converts detections to yaw rate commands
   4. PX4 Converter - Sends yaw commands to PX4 via DDS
 
 Prerequisites:
   - Intel RealSense camera connected
-  - YOLO model weights available (TensorRT engine or .pt file)
+  - Model weights available (TensorRT engine, ONNX, or .pt file)
   - MicroXRCE-DDS Agent running
   - PX4 flight controller connected
   - Workspace built and sourced
 
 Usage:
+  # YOLO detection (default)
   ros2 launch airhound e2e_flight.launch.py
-  ros2 launch airhound e2e_flight.launch.py model_path:=/path/to/model.engine
-  ros2 launch airhound e2e_flight.launch.py max_rate:=0.5 auto_arm:=false
+
+  # RF-DETR detection
+  ros2 launch airhound e2e_flight.launch.py model_type:=rfdetr model_path:=models/drone_rfdetr.engine
+
+  # Custom settings
+  ros2 launch airhound e2e_flight.launch.py model_type:=rfdetr max_rate:=0.5 auto_arm:=false
 
 Data Flow:
   RealSense -> detector_node -> /detections -> tracking_node -> /target_yaw -> px4_converter_node -> /fmu/in/* -> PX4
@@ -70,16 +75,34 @@ def generate_launch_description():
     )
     
     # Detector arguments
+    model_type_arg = DeclareLaunchArgument(
+        'model_type',
+        default_value='yolo',
+        description='Detector type: "yolo" or "rfdetr"'
+    )
+    
     model_path_arg = DeclareLaunchArgument(
         'model_path',
         default_value='models/yolov8Detector.engine',
-        description='Path to YOLO model (TensorRT .engine or PyTorch .pt)'
+        description='Path to model (TensorRT .engine, ONNX .onnx, or PyTorch .pt)'
+    )
+    
+    imgsz_arg = DeclareLaunchArgument(
+        'imgsz',
+        default_value='0',
+        description='Input image size (0 = auto-detect based on model_type)'
     )
     
     confidence_threshold_arg = DeclareLaunchArgument(
         'confidence_threshold',
         default_value='0.25',
         description='Detection confidence threshold'
+    )
+    
+    iou_threshold_arg = DeclareLaunchArgument(
+        'iou_threshold',
+        default_value='0.45',
+        description='NMS IoU threshold'
     )
     
     device_arg = DeclareLaunchArgument(
@@ -161,7 +184,7 @@ def generate_launch_description():
         ]
     )
     
-    # Detector Node (YOLO)
+    # Detector Node (YOLO or RF-DETR)
     # Subscribes: /camera/color/image_raw
     # Publishes: /detections (Detection2DArray)
     detector_node = Node(
@@ -170,8 +193,11 @@ def generate_launch_description():
         name='detector_node',
         output='screen',
         parameters=[{
+            'model_type': LaunchConfiguration('model_type'),
             'model_path': LaunchConfiguration('model_path'),
-            'confidence_threshold': LaunchConfiguration('confidence_threshold'),
+            'imgsz': LaunchConfiguration('imgsz'),
+            'conf': LaunchConfiguration('confidence_threshold'),
+            'iou': LaunchConfiguration('iou_threshold'),
             'device': LaunchConfiguration('device'),
             'input_image_topic': '/camera/color/image_raw',
             'output_detections_topic': '/detections',
@@ -217,8 +243,11 @@ def generate_launch_description():
         rgb_width_arg,
         rgb_height_arg,
         rgb_fps_arg,
+        model_type_arg,
         model_path_arg,
+        imgsz_arg,
         confidence_threshold_arg,
+        iou_threshold_arg,
         device_arg,
         max_rate_arg,
         deadband_arg,

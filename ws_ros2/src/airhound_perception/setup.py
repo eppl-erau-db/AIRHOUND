@@ -4,7 +4,7 @@ package_name = "airhound_perception"
 
 setup(
     name=package_name,
-    version="0.0.1",
+    version="0.1.0",
     packages=[package_name],
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
@@ -27,14 +27,16 @@ setup(
         ),
         ("share/" + package_name + "/config", ["config/perception.yaml"]),
     ],
-    install_requires=["setuptools", "numpy>=1.24,<2.0"],
+    install_requires=["setuptools", "numpy>=1.24,<2.0", "opencv-python>=4.5.0"],
     extras_require={
-        "yolo": ["ultralytics>=8.0.0"],  # Only needed for real YOLO detection
+        "yolo": ["ultralytics>=8.0.0"],  # YOLO detection
+        "rfdetr": ["onnxruntime-gpu>=1.15.0"],  # RF-DETR with ONNX Runtime
+        "tensorrt": [],  # TensorRT installed separately on Jetson
     },
     zip_safe=True,
-    maintainer="Rylan",
-    maintainer_email="rylan@example.com",
-    description="ROS 2 perception node for AIRHOUND.",
+    maintainer="EPPL",
+    maintainer_email="eppl@erau.edu",
+    description="ROS2 perception node for AIRHOUND with YOLO and RF-DETR support.",
     license="MIT",
     entry_points={
         "console_scripts": [

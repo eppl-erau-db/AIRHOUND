@@ -48,16 +48,29 @@ mock_detector:
 # -----------------------------------------------------------------------------
 # Perception Settings (only used in flight mode)
 # -----------------------------------------------------------------------------
-# Real YOLO-based object detection
+# Object detection for drone tracking
+# Supports multiple detector backends for comparison (SPIE abstract)
 perception:
+  # Model type selection: "yolo" or "rfdetr"
+  # - yolo:   Ultralytics YOLOv8 (faster, established baseline)
+  # - rfdetr: RF-DETR transformer model (newer, higher accuracy)
+  model_type: "yolo"
+  
   # Model configuration
-  model_path: "models/yolov8Detector.engine"  # TensorRT engine path
+  # For YOLO: .pt (PyTorch) or .engine (TensorRT)
+  # For RF-DETR: .onnx (ONNX Runtime) or .engine (TensorRT)
+  model_path: "models/yolov8Detector.engine"
+  
+  # Input image size
+  # - YOLO default: 1280 (configurable)
+  # - RF-DETR fixed: 560 (set to 0 for auto-detection based on model_type)
+  imgsz: 0                   # 0 = auto-detect based on model_type
   
   # Inference settings
-  image_width: 1280
-  image_height: 720
-  confidence_threshold: 0.25
-  iou_threshold: 0.45
+  image_width: 1280          # Camera capture width
+  image_height: 720          # Camera capture height
+  confidence_threshold: 0.25 # Minimum detection confidence
+  iou_threshold: 0.45        # NMS IoU threshold
   
   # Device selection
   device: "0"                # GPU device ID, or "cpu" for CPU inference
@@ -65,6 +78,27 @@ perception:
   # Topic configuration
   input_image_topic: "/camera/color/image_raw"
   output_detections_topic: "/detections"
+
+# -----------------------------------------------------------------------------
+# RF-DETR Specific Settings (used when model_type: "rfdetr")
+# -----------------------------------------------------------------------------
+# RF-DETR transformer-based detector for drone detection
+rfdetr:
+  # Model paths (relative to models/ directory or absolute)
+  # TensorRT engine (recommended for Jetson deployment)
+  engine_path: "models/drone_rfdetr.engine"
+  # ONNX model (for development/testing)
+  onnx_path: "models/drone_rfdetr.onnx"
+  
+  # RF-DETR Base model specifications
+  # - Input size: 560x560 (fixed)
+  # - Parameters: 31.8M
+  # - Outputs: 300 detection queries
+  input_size: 560
+  
+  # Class names (single class for drone detection)
+  class_names:
+    - "drone"
 
 # -----------------------------------------------------------------------------
 # Camera Settings (only used in flight mode)
