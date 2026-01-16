@@ -22,3 +22,13 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Model files (too large for git)
+*.pt
+*.pth
+*.onnx
+*.engine
+models/*.pt
+models/*.pth
+models/*.onnx
+models/*.engine

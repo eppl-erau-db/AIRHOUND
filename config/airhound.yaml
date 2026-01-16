@@ -48,19 +48,33 @@ mock_detector:
 # -----------------------------------------------------------------------------
 # Perception Settings (only used in flight mode)
 # -----------------------------------------------------------------------------
-# Real YOLO-based object detection
+# Object detection configuration
 perception:
-  # Model configuration
-  model_path: "models/yolov8Detector.engine"  # TensorRT engine path
+  # Detector type: "yolo" or "rfdetr"
+  detector_type: "rfdetr"
   
-  # Inference settings
+  # Model configuration
+  # For YOLO: .pt (PyTorch) or .engine (TensorRT)
+  # For RF-DETR: .pth (PyTorch), .onnx, or .engine (TensorRT)
+  model_path: "models/drone_rfdetr.engine"
+  
+  # Common inference settings
+  confidence_threshold: 0.25
+  device: "0"                # GPU device ID, or "cpu" for CPU inference
+  
+  # Image settings
   image_width: 1280
   image_height: 720
-  confidence_threshold: 0.25
-  iou_threshold: 0.45
   
-  # Device selection
-  device: "0"                # GPU device ID, or "cpu" for CPU inference
+  # YOLO-specific settings (ignored if detector_type is "rfdetr")
+  yolo:
+    imgsz: 1280              # Input image size
+    iou_threshold: 0.45      # NMS IoU threshold
+  
+  # RF-DETR-specific settings (ignored if detector_type is "yolo")
+  rfdetr:
+    input_size: 560          # RF-DETR input size (560 for base, 728 for large)
+    variant: "base"          # Model variant: "base" or "large"
   
   # Topic configuration
   input_image_topic: "/camera/color/image_raw"

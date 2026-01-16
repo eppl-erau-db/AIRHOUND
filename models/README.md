@@ -1,0 +1,1 @@
+# Model files go here\n\nDo NOT commit model files (.pt, .pth, .onnx, .engine) to git.\nThey are too large and platform-specific (TensorRT engines).\n\nPlace your models in this directory:\n- drone_rfdetr.engine (TensorRT, generated on Jetson)\n- drone_rfdetr.onnx (ONNX, portable)\n- yolov8Detector.engine (TensorRT)\n
