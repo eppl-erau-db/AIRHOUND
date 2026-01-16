@@ -490,11 +490,22 @@ class RFDETRDetector:
             self.trt_stream,
         )
 
-        # Run inference
-        self.trt_context.execute_async_v2(
-            bindings=self.trt_bindings,
-            stream_handle=self.trt_stream.handle,
-        )
+        # Run inference - TensorRT 10.x uses execute_async_v3, older uses execute_async_v2
+        if hasattr(self.trt_context, 'execute_async_v3'):
+            # TensorRT 10.x API - set tensor addresses first
+            for i, inp in enumerate(self.trt_inputs):
+                name = self.trt_engine.get_tensor_name(i)
+                self.trt_context.set_tensor_address(name, int(inp["device"]))
+            for i, out in enumerate(self.trt_outputs):
+                name = self.trt_engine.get_tensor_name(i + len(self.trt_inputs))
+                self.trt_context.set_tensor_address(name, int(out["device"]))
+            self.trt_context.execute_async_v3(stream_handle=self.trt_stream.handle)
+        else:
+            # TensorRT 8.x/9.x API
+            self.trt_context.execute_async_v2(
+                bindings=self.trt_bindings,
+                stream_handle=self.trt_stream.handle,
+            )
 
         # Copy outputs to host
         for out in self.trt_outputs:
