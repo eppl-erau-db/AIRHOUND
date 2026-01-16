@@ -12,11 +12,18 @@ find_package(px4_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
+# Enable px4_msgs for nodes that use it
+add_definitions(-DPX4_MSGS_AVAILABLE)
+
 # Add executables
 add_executable(yaw_controller_node src/yaw_controller_node.cpp)
 add_executable(dummy_yaw_publisher src/dummy_yaw_publisher.cpp)
 add_executable(px4_simulator src/px4_simulator.cpp)
 add_executable(simple_test_node src/simple_test_node.cpp)
+add_executable(px4_converter_node src/px4_converter_node.cpp)
+add_executable(px4_converter_gazebo src/px4_converter_gazebo.cpp)
+add_executable(demo_publisher_enhanced src/demo_publisher_enhanced.cpp)
+add_executable(integration_test_monitor src/integration_test_monitor.cpp)
 
 # Link dependencies
 ament_target_dependencies(yaw_controller_node
@@ -41,12 +48,40 @@ ament_target_dependencies(simple_test_node
   std_msgs
 )
 
+ament_target_dependencies(px4_converter_node
+  rclcpp
+  px4_msgs
+  std_msgs
+)
+
+ament_target_dependencies(px4_converter_gazebo
+  rclcpp
+  px4_msgs
+  std_msgs
+)
+
+ament_target_dependencies(demo_publisher_enhanced
+  rclcpp
+  std_msgs
+  geometry_msgs
+)
+
+ament_target_dependencies(integration_test_monitor
+  rclcpp
+  px4_msgs
+  std_msgs
+)
+
 # Install executables
 install(TARGETS
   yaw_controller_node
   dummy_yaw_publisher
   px4_simulator
   simple_test_node
+  px4_converter_node
+  px4_converter_gazebo
+  demo_publisher_enhanced
+  integration_test_monitor
   DESTINATION lib/${PROJECT_NAME}
 )
 

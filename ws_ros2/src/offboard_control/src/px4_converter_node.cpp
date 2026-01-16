@@ -1,5 +1,5 @@
 #include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/float32.hpp>
 #include <std_msgs/msg/string.hpp>
 
 // PX4 message types (will work with px4_msgs package)
@@ -61,7 +61,7 @@ public:
         this->declare_parameter("auto_arm", true);
         this->declare_parameter("publish_rate", 10.0);
         this->declare_parameter("safety_timeout", 5.0);
-        this->declare_parameter("use_sim_time", true);
+        // Note: use_sim_time is automatically declared by ROS2
         
         auto_arm_ = this->get_parameter("auto_arm").as_bool();
         double publish_rate = this->get_parameter("publish_rate").as_double();

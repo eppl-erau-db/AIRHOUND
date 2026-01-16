@@ -15,7 +15,7 @@ using std::placeholders::_1;
 class YawControllerNode : public rclcpp::Node {
 public:
     YawControllerNode() : Node("yaw_controller_node") {
-        rmw_qos_profile_t qos_profile = rmw_get_qos_profile_services_default();
+        rmw_qos_profile_t qos_profile = rmw_qos_profile_services_default;
         qos_profile.reliability = RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
 
         publisher_offboard_control_mode_ = this->create_publisher<px4_msgs::msg::OffboardControlMode>("/fmu/in/offboard_control_mode", 10);

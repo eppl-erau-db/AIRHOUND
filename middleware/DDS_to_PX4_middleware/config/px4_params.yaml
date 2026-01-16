@@ -1,0 +1,18 @@
+# PX4 parameters for safe offboard operation
+px4_parameters:
+  # Offboard loss timeout (seconds)
+  COM_OF_LOSS_T: 1.0
+  
+  # RC loss behavior in offboard mode
+  # 0: Disabled, 1: Hold, 2: Return, 3: Land
+  COM_OBL_RC_ACT: 2
+  
+  # Offboard loss behavior  
+  # 0: Land, 1: Hold, 2: Return
+  COM_OBL_ACT: 1
+  
+  # Position control gains (optional tuning)
+  MPC_XY_P: 0.8
+  MPC_Z_P: 1.0
+  MPC_YAW_P: 2.0
+
