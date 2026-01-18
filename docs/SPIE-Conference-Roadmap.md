@@ -258,7 +258,7 @@ Variable        ██████████?           Co-Lead (Hardware Plat
 | RF-DETR ROS2 integration | **Placeholder only** | TBD: `detectors/rfdetr_detector.py` |
 | Kalman filter (6-state) | Written, **not integrated** | TBD: `airhound_nodes/kalman_filter.py` |
 | D455 depth config | Configured, **not subscribed** | TBD: `realsense_profile.yaml` |
-| Yaw tracking node | Working | [`tracking.py`](https://github.com/eppl-erau-db/AIRHOUND/blob/main/ws_ros2/src/Tracking-Geometry/Tracking-Geometry/tracking.py) |
+| Yaw tracking node | Working | [`tracking.py`](https://github.com/eppl-erau-db/AIRHOUND/blob/main/ws_ros2/src/tracking_geometry/tracking_geometry/tracking.py) |
 | Detector factory | Working | TBD: `detectors/factory.py` |
 
 ### Target State (End of Project)

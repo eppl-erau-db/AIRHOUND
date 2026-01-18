@@ -224,8 +224,8 @@ build_workspace() {
     colcon build --packages-select airhound_perception --symlink-install
     source install/setup.bash
     
-    echo "Building Tracking-Geometry..."
-    colcon build --packages-select Tracking-Geometry --symlink-install
+    echo "Building tracking_geometry..."
+    colcon build --packages-select tracking_geometry --symlink-install
     source install/setup.bash
     
     echo "Building offboard_control..."

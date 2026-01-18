@@ -182,7 +182,7 @@ def generate_launch_description():
     # Subscribes: /detections, /camera/camera_info
     # Publishes: /target_yaw (Float32)
     tracking_node = Node(
-        package='Tracking-Geometry',
+        package='tracking_geometry',
         executable='tracking_node',
         name='tracking_node',
         output='screen',

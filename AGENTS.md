@@ -45,7 +45,7 @@ AIRHOUND/
         │       ├── rfdetr_detector.py    # RF-DETR wrapper
         │       ├── mock_detector.py      # Synthetic detections for sim
         │       └── synthetic_camera.py   # Fake camera for testing
-        ├── Tracking-Geometry/      # Yaw error computation
+        ├── tracking_geometry/      # Yaw error computation
         ├── offboard_control/       # PX4 offboard interface
         └── msg/                    # Custom message definitions
 ```

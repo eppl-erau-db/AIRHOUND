@@ -85,7 +85,7 @@ Flight mode uses real camera input and YOLO detection.
 | Package | Description |
 |---------|-------------|
 | `airhound_perception` | Detection nodes (YOLO and mock detector) |
-| `Tracking-Geometry` | Pixel-to-yaw conversion |
+| `tracking_geometry` | Pixel-to-yaw conversion |
 | `offboard_control` | PX4 offboard interface |
 
 ## Configuration
@@ -131,7 +131,7 @@ AIRHOUND/
 └── ws_ros2/
     └── src/
         ├── airhound_perception/   # Detection package
-        ├── Tracking-Geometry/     # Tracking package
+        ├── tracking_geometry/     # Tracking package
         └── offboard_control/      # PX4 interface package
 ```
 
@@ -216,7 +216,7 @@ source /opt/ros/humble/setup.bash
 ros2 run airhound_perception mock_detector
 
 # Terminal 2: Tracking node
-ros2 run Tracking-Geometry tracking_node
+ros2 run tracking_geometry tracking_node
 
 # Terminal 3: PX4 converter
 ros2 run offboard_control px4_converter_node
