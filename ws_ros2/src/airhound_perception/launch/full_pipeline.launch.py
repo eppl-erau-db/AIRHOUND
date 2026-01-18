@@ -109,7 +109,7 @@ def generate_launch_description():
     
     # 3. Tracking Node
     tracking_node = Node(
-        package='Tracking-Geometry',
+        package='tracking_geometry',
         executable='tracking_node',
         name='tracking_node',
         output='screen',

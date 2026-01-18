@@ -19,7 +19,7 @@ from rclpy.time import Time as RclTime
 from std_msgs.msg import Float32
 from sensor_msgs.msg import Image, CameraInfo, CompressedImage
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose, BoundingBox2D
-from geometry_msgs.msg import PoseWithCovariance, Pose, Point
+from geometry_msgs.msg import PoseWithCovariance, Pose, Point, PointStamped
 
 from cv_bridge import CvBridge
 import cv2
@@ -160,6 +160,7 @@ class PerceptionNode(Node):
 
         # ==================== PUBLISHERS ====================
         self.det_pub = self.create_publisher(Detection2DArray, det_topic, qos_default)
+        self.target_3d_pub = self.create_publisher(PointStamped, '/perception/target_3d', qos_default)
         self.lat_pub = self.create_publisher(Float32, '/perception/latency_ms', qos_default)
         self.fps_pub = self.create_publisher(Float32, '/perception/fps', qos_default)
         self.depth_status_pub = self.create_publisher(Float32, '/perception/depth_available', qos_default)
@@ -337,22 +338,76 @@ class PerceptionNode(Node):
         
         return depth_meters
 
-    def _process_detections(self, cv_image: np.ndarray, now) -> Detection2DArray:
+    def _project_to_3d(self, u: float, v: float, depth_m: float) -> tuple:
+        """
+        Project 2D pixel + depth to 3D position in camera optical frame.
+        
+        Uses pinhole camera model:
+            X = (u - cx) * Z / fx
+            Y = (v - cy) * Z / fy
+            Z = depth
+        
+        Parameters
+        ----------
+        u : float
+            Horizontal pixel coordinate
+        v : float
+            Vertical pixel coordinate
+        depth_m : float
+            Depth in meters
+            
+        Returns
+        -------
+        tuple
+            (x, y, z) in meters, camera optical frame (+X right, +Y down, +Z forward)
+            Returns (nan, nan, nan) if intrinsics unavailable or depth invalid
+        """
+        if self.cam_info is None or np.isnan(depth_m):
+            return (float('nan'), float('nan'), float('nan'))
+        
+        # Extract intrinsics from K matrix
+        fx = self.cam_info.k[0]
+        fy = self.cam_info.k[4]
+        cx = self.cam_info.k[2]
+        cy = self.cam_info.k[5]
+        
+        if fx == 0 or fy == 0:
+            return (float('nan'), float('nan'), float('nan'))
+        
+        # Project to 3D
+        x = (u - cx) * depth_m / fx
+        y = (v - cy) * depth_m / fy
+        z = depth_m
+        
+        return (x, y, z)
+
+    def _process_detections(self, cv_image: np.ndarray, now) -> tuple:
         """
         Process image through detector and return Detection2DArray with depth.
         
         Depth is embedded in each detection's pose.pose.position.z field.
-        The tracking team can use this along with camera intrinsics to compute
-        3D position: x = (u - cx) * z / fx, y = (v - cy) * z / fy
+        Also computes 3D position for the highest-confidence detection.
+        
+        Returns
+        -------
+        tuple
+            (Detection2DArray, PointStamped or None)
         """
         det_array = Detection2DArray()
         det_array.header.stamp = now.to_msg()
         det_array.header.frame_id = self.frame_id
+        
+        target_3d_msg = None  # Will hold 3D position of best detection
 
         if self.detector is None or cv_image is None:
-            return det_array
+            return det_array, target_3d_msg
 
         detections = self.detector.infer(cv_image)
+        
+        # Track best detection for 3D publishing
+        best_detection = None
+        best_conf = 0.0
+        best_3d = None
         
         for d in detections:
             x1, y1, x2, y2 = d.xyxy
@@ -382,6 +437,11 @@ class PerceptionNode(Node):
                 # (Tracking team can use these with camera intrinsics for 3D)
                 hyp.pose.pose.position.x = center_u
                 hyp.pose.pose.position.y = center_v
+                
+                # Track best detection for 3D publishing
+                if d.conf > best_conf and not np.isnan(depth_m):
+                    best_conf = d.conf
+                    best_3d = self._project_to_3d(center_u, center_v, depth_m)
             else:
                 hyp.pose.pose.position.z = float('nan')
 
@@ -389,8 +449,17 @@ class PerceptionNode(Node):
             det.bbox = bbox
             det.results.append(hyp)
             det_array.detections.append(det)
+        
+        # Create PointStamped for best detection
+        if best_3d is not None and not np.isnan(best_3d[2]):
+            target_3d_msg = PointStamped()
+            target_3d_msg.header.stamp = now.to_msg()
+            target_3d_msg.header.frame_id = self.frame_id
+            target_3d_msg.point.x = best_3d[0]
+            target_3d_msg.point.y = best_3d[1]
+            target_3d_msg.point.z = best_3d[2]
 
-        return det_array
+        return det_array, target_3d_msg
 
     def on_image(self, msg: Image):
         """Process uncompressed RGB image."""
@@ -402,8 +471,12 @@ class PerceptionNode(Node):
             self.get_logger().warn(f"cv_bridge conversion failed: {e}")
             cv_image = None
 
-        det_array = self._process_detections(cv_image, now)
+        det_array, target_3d_msg = self._process_detections(cv_image, now)
         self.det_pub.publish(det_array)
+        
+        # Publish 3D position if available
+        if target_3d_msg is not None:
+            self.target_3d_pub.publish(target_3d_msg)
 
         # Latency measurement
         image_stamp = msg.header.stamp
@@ -429,8 +502,12 @@ class PerceptionNode(Node):
             self.get_logger().warn(f"compressed decode failed: {e}")
             cv_image = None
 
-        det_array = self._process_detections(cv_image, now)
+        det_array, target_3d_msg = self._process_detections(cv_image, now)
         self.det_pub.publish(det_array)
+        
+        # Publish 3D position if available
+        if target_3d_msg is not None:
+            self.target_3d_pub.publish(target_3d_msg)
 
         # Latency measurement
         image_stamp = msg.header.stamp
