@@ -32,3 +32,18 @@ models/*.pt
 models/*.pth
 models/*.onnx
 models/*.engine
+
+# Dataset files (too large for git)
+data/train/
+data/test/
+data/valid/
+data/sample.mp4
+data/degradation_preview/
+data/*.yaml
+data/README.*.txt
+
+# Benchmark raw outputs (keep summaries in data/analysis/)
+benchmark_results/
+
+# External ROS2 packages (cloned separately)
+ws_ros2/src/px4_msgs/
