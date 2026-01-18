@@ -46,6 +46,26 @@
 
 ---
 
+## Progress Log
+
+### Completed Milestones
+
+| Date | Milestone | Notes |
+|------|-----------|-------|
+| Jan 17-18, 2026 | **Degradation Evaluation Complete** | RF-DETR vs YOLOv8 under 4 degradation types × 5 severity levels. Key finding: RF-DETR +40% mAP advantage under severe noise. See `docs/DEGRADATION_EVAL_RESULTS.md` |
+| Jan 18, 2026 | Perception 3D Publisher | Added `/perception/target_3d` topic for 3D position (PR #11 merged) |
+| Jan 18, 2026 | Documentation Scaffolding | Updated README, config, launch files with RF-DETR and depth integration |
+
+### Key Results Summary
+
+**Degradation Robustness (Jan 18, 2026):**
+- Gaussian Noise @ 1.0 severity: RF-DETR 0.716 vs YOLOv8 0.318 mAP (**+40% advantage**)
+- Low Light @ 1.0 severity: RF-DETR 0.670 vs YOLOv8 0.275 mAP (**+39% advantage**)
+- Motion Blur: Both models struggle at high severity (need Kalman/PINN for recovery)
+- Clean baseline: YOLOv8 0.957 vs RF-DETR 0.953 (comparable)
+
+---
+
 ## 3D Control Scope: Altitude + Pitch Viewing
 
 ### Summary
@@ -476,8 +496,8 @@ def physics_loss(pred_state, true_state, v_max=10.0):
 **Perception:**
 
 - [ ] RF-DETR TensorRT running stable on Jetson
-- [ ] Begin synthetic degradation pipeline (motion blur, noise)
-- [ ] Document RF-DETR vs YOLOv8 baseline metrics
+- [x] ~~Begin synthetic degradation pipeline (motion blur, noise)~~ **COMPLETED EARLY (Week 1)** - See `docs/DEGRADATION_EVAL_RESULTS.md`
+- [x] ~~Document RF-DETR vs YOLOv8 baseline metrics~~ **COMPLETED EARLY (Week 1)** - Full evaluation with 4 degradation types × 5 severity levels
 
 **Tracking Team:**
 
@@ -547,8 +567,8 @@ def physics_loss(pred_state, true_state, v_max=10.0):
 
 **Perception:**
 
-- [ ] Complete synthetic degradation pipeline (blur, occlusion, noise)
-- [ ] Test degradation on both YOLOv8 and RF-DETR
+- [x] ~~Complete synthetic degradation pipeline (blur, occlusion, noise)~~ **COMPLETED EARLY (Week 1)**
+- [x] ~~Test degradation on both YOLOv8 and RF-DETR~~ **COMPLETED EARLY (Week 1)** - Key finding: RF-DETR +40% advantage under severe noise
 
 **Tracking Team:**
 
