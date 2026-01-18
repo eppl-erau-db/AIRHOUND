@@ -106,19 +106,19 @@ public:
 
 private:
     void yaw_command_callback(const std_msgs::msg::Float32::SharedPtr msg) {
-        // Convert demo command to PX4 format
+        // Receive yaw rate command from tracking node
         target_yaw_ = static_cast<float>(msg->data);
         last_command_time_ = this->now();
         command_count_++;
         
-        // Normalize yaw to [-π, π] range for PX4
-        while (target_yaw_ > M_PI) target_yaw_ -= 2 * M_PI;
-        while (target_yaw_ < -M_PI) target_yaw_ += 2 * M_PI;
+        // Clamp yaw rate to reasonable limits (±1 rad/s typical)
+        if (target_yaw_ > 1.5f) target_yaw_ = 1.5f;
+        if (target_yaw_ < -1.5f) target_yaw_ = -1.5f;
         
-        double degrees = target_yaw_ * 180.0 / M_PI;
+        double degrees_per_sec = target_yaw_ * 180.0 / M_PI;
         RCLCPP_INFO(this->get_logger(), 
-            "🎯 Converted yaw command %d: %.3f rad (%.1f°) → PX4 setpoint",
-            command_count_, target_yaw_, degrees);
+            "🎯 Received yaw rate cmd %d: %.3f rad/s (%.1f°/s) → PX4 yawspeed",
+            command_count_, target_yaw_, degrees_per_sec);
         
         // Update status
         has_received_command_ = true;
@@ -181,9 +181,11 @@ private:
         msg.velocity = {0.0f, 0.0f, 0.0f};
         msg.acceleration = {0.0f, 0.0f, 0.0f};
         
-        // Apply converted yaw command
-        msg.yaw = target_yaw_;
-        msg.yawspeed = 0.0f; // Let PX4 handle yaw rate
+        // Apply yaw rate command from tracking node
+        // tracking.py publishes yaw error/rate (proportional to pixel offset)
+        // Use yawspeed for rate control, set yaw to NaN to ignore absolute angle
+        msg.yaw = std::nanf(""); // NaN = don't control absolute yaw
+        msg.yawspeed = target_yaw_; // Use as yaw rate command (rad/s)
         msg.timestamp = timestamp;
         
         trajectory_setpoint_pub_->publish(msg);

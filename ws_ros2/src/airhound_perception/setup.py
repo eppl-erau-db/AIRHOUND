@@ -17,6 +17,7 @@ setup(
                 "launch/synthetic_test.launch.py",
                 "launch/sim_test.launch.py",
                 "launch/record_bag.launch.py",
+                "launch/full_pipeline.launch.py",
             ],
         ),
         (
@@ -25,7 +26,11 @@ setup(
                 "env_hook/airhound_perception_env.sh",
             ],
         ),
-        ("share/" + package_name + "/config", ["config/perception.yaml"]),
+        ("share/" + package_name + "/config", [
+            "config/perception.yaml",
+            "config/perception_dev.yaml",
+            "config/perception_rfdetr.yaml",
+        ]),
     ],
     install_requires=["setuptools", "numpy>=1.24,<2.0"],
     extras_require={

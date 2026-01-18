@@ -1,26 +1,58 @@
 # perception.yaml (production configuration)
 # This is the production / high‑resolution parameter set for the perception node.
+#
 # Differences from perception_dev.yaml:
 #   - Higher imgsz (1280) for better detection fidelity (slower FPS)
 #   - Intended for final validation / camera integration
+#
 # Usage notes:
-#   - Launch files default to this file; override with: params_file:=/path/to/perception_dev.yaml
+#   - Launch files default to this file; override with: params_file:=/path/to/other.yaml
 #   - If TensorRT engine is missing, either:
 #       * Run the recovery script with --engine, or
 #       * Change model_path back to the .pt weights (slower).
 #   - Ensure the node name 'perception_node' matches this top-level key.
+#
+# Available configurations:
+#   - perception.yaml         - YOLOv8 production (this file)
+#   - perception_dev.yaml     - YOLOv8 development (640px, faster)
+#   - perception_rfdetr.yaml  - RF-DETR transformer detector
+
 perception_node:
   ros__parameters:
+    # Input / output topics
     input_image_topic: "/camera/color/image_raw"
     output_detections_topic: "/detections"
+    camera_info_topic: "/camera/camera_info"
+
+    # Frame & publish settings
     frame_id: "camera_color_optical_frame"
     publish_rate_hz: 30.0
     use_compressed: false
-    camera_info_topic: "/camera/camera_info"
-    # Adjust model path to your deployed artifact (engine, onnx, or pt). Default to repo weight.
+
+    # === DETECTOR SELECTION ===
+    # Options: "yolo" (default) or "rfdetr"
+    # For RF-DETR, use perception_rfdetr.yaml instead
+    detector_type: "yolo"
+
+    # === MODEL PATH ===
+    # Adjust model path to your deployed artifact (engine, onnx, or pt).
     model_path: "models/yolov8Detector.engine"
-    # Inference resolution (production). Use 640 in perception_dev.yaml for faster iteration.
-    imgsz: 1280
-    conf: 0.25
-    iou: 0.45
-    device: "0"
+
+    # === YOLO INFERENCE PARAMS ===
+    imgsz: 1280        # Inference resolution (production)
+    conf: 0.25         # Confidence threshold
+    iou: 0.45          # NMS IoU threshold
+    device: "0"        # "0" for GPU, "cpu" for CPU
+
+    # === RF-DETR PARAMS (used when detector_type=rfdetr) ===
+    rfdetr_input_size: 560
+    rfdetr_variant: "base"
+
+    # === DEPTH INTEGRATION ===
+    # Fuses depth from RealSense D455 with detections
+    # Depth is published in Detection2D.results[].pose.pose.position.z (meters)
+    # Tracking team uses this for 3D position estimation
+    enable_depth: true
+    depth_image_topic: "/camera/depth/image_raw"
+    depth_scale: 0.001          # D455 publishes mm, scale to meters
+    depth_window_size: 5        # Median filter window for noise robustness
