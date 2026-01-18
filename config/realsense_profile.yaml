@@ -1,0 +1,42 @@
+# RealSense D455 Configuration for AIRHOUND Flight Testing
+# This file configures the realsense2_camera ROS2 node
+
+/**:
+  ros__parameters:
+    # Device selection
+    serial_no: ""  # Empty = use first available D455
+    usb_port_id: ""
+    device_type: "d455"
+    
+    # RGB camera settings
+    enable_color: true
+    rgb_camera.profile: "1280x720x30"
+    rgb_camera.color_format: "RGB8"
+    rgb_camera.enable_auto_exposure: true
+    
+    # Depth camera settings  
+    enable_depth: true
+    depth_module.profile: "848x480x30"
+    depth_module.enable_auto_exposure: true
+    
+    # Disable unused streams to save bandwidth/compute
+    enable_infra1: false
+    enable_infra2: false
+    enable_gyro: false
+    enable_accel: false
+    pointcloud.enable: false
+    
+    # Frame alignment
+    align_depth.enable: true  # Align depth to RGB frame
+    
+    # Post-processing (minimal for low latency)
+    decimation_filter.enable: false
+    spatial_filter.enable: false
+    temporal_filter.enable: false
+    hole_filling_filter.enable: false
+    
+    # Performance
+    enable_sync: true  # Sync RGB and depth frames
+    json_file_path: ""  # Use default settings
+    
+    # Topic remapping is done in launch file
