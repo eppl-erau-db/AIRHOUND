@@ -1,0 +1,65 @@
+# perception_rfdetr.yaml
+# RF-DETR configuration for AIRHOUND perception node.
+#
+# This configuration uses the RF-DETR transformer-based detector instead of YOLOv8.
+# RF-DETR offers superior occlusion handling via attention mechanisms.
+#
+# Model formats supported:
+#   - TensorRT engine (.engine) - fastest, requires compatible engine
+#   - ONNX (.onnx) - portable, uses ONNX Runtime
+#   - PyTorch (.pth) - requires rfdetr package
+#
+# Usage:
+#   ros2 launch airhound_perception perception.launch.py \
+#       params_file:=$(ros2 pkg prefix airhound_perception)/share/airhound_perception/config/perception_rfdetr.yaml
+#
+# Or modify perception.launch.py to point to this file.
+
+perception_node:
+  ros__parameters:
+    # Input / output topics (same as YOLO for seamless switching)
+    input_image_topic: "/camera/color/image_raw"
+    output_detections_topic: "/detections"
+    camera_info_topic: "/camera/camera_info"
+
+    # Frame & publish settings
+    frame_id: "camera_color_optical_frame"
+    publish_rate_hz: 30.0
+
+    # Use compressed input if available (saves bandwidth)
+    use_compressed: false
+
+    # === DETECTOR SELECTION ===
+    detector_type: "rfdetr"  # Use RF-DETR instead of YOLO
+
+    # === MODEL PATH ===
+    # Options (in order of preference):
+    #   1. TensorRT engine: /home/airhound/AIRHOUND/models/drone_rfdetr.engine
+    #   2. ONNX model: /home/airhound/AIRHOUND/models/drone_rfdetr_best.onnx
+    #   3. PyTorch weights: /path/to/drone_rfdetr.pth (requires rfdetr package)
+    #
+    # TensorRT engine verified working on Jetson Orin Nano (Jan 2026).
+    # Cross-device warning is cosmetic - inference works correctly.
+    # TensorRT achieves ~25 FPS vs ~1 FPS for ONNX on CPU.
+    model_path: "/home/airhound/AIRHOUND/models/drone_rfdetr.engine"
+
+    # === COMMON INFERENCE PARAMS ===
+    conf: 0.25         # Confidence threshold
+    device: "0"        # "0" for GPU, "cpu" for CPU
+
+    # === RF-DETR SPECIFIC PARAMS ===
+    rfdetr_input_size: 560    # RF-DETR uses 560x560 input (not 640 like YOLO)
+    rfdetr_variant: "base"    # "base" or "large"
+
+    # === YOLO PARAMS (ignored when detector_type=rfdetr, but required for node) ===
+    imgsz: 640
+    iou: 0.45
+
+    # === DEPTH INTEGRATION ===
+    # Fuses depth from RealSense D455 with detections
+    # Depth is published in Detection2D.results[].pose.pose.position.z (meters)
+    # Tracking team uses this for 3D position estimation
+    enable_depth: true
+    depth_image_topic: "/camera/depth/image_raw"
+    depth_scale: 0.001          # D455 publishes mm, scale to meters
+    depth_window_size: 5        # Median filter window for noise robustness

@@ -322,15 +322,17 @@ class RFDETRDetector:
 
         # RF-DETR output format: boxes (N, 4) in cxcywh, scores (N, num_classes)
         # The exact output format depends on the export settings
-        boxes = outputs.get("boxes", outputs.get("pred_boxes", None))
-        scores = outputs.get("scores", outputs.get("pred_logits", None))
+        # Common output names: boxes/pred_boxes/dets for boxes, scores/pred_logits/labels for scores
+        boxes = outputs.get("boxes", outputs.get("pred_boxes", outputs.get("dets", None)))
+        scores = outputs.get("scores", outputs.get("pred_logits", outputs.get("labels", None)))
 
         if boxes is None or scores is None:
-            # Try alternate output names
+            # Try alternate output names via pattern matching
             for key, val in outputs.items():
-                if "box" in key.lower() and boxes is None:
+                key_lower = key.lower()
+                if boxes is None and ("box" in key_lower or "det" in key_lower):
                     boxes = val
-                elif "score" in key.lower() or "logit" in key.lower():
+                elif scores is None and ("score" in key_lower or "logit" in key_lower or "label" in key_lower):
                     scores = val
 
         if boxes is None or scores is None:
