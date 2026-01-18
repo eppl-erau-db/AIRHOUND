@@ -76,9 +76,20 @@ perception:
     input_size: 560          # RF-DETR input size (560 for base, 728 for large)
     variant: "base"          # Model variant: "base" or "large"
   
+  # Depth integration settings
+  # Fuses RealSense D455 depth with detections for 3D position estimation
+  depth:
+    enable: true             # Enable depth fusion with detections
+    topic: "/camera/depth/image_raw"
+    scale: 0.001             # D455 publishes mm, scale to meters
+    window_size: 5           # Median filter window for noise robustness
+    min_range: 0.4           # D455 minimum reliable range (meters)
+    max_range: 6.0           # D455 maximum reliable range (meters)
+  
   # Topic configuration
   input_image_topic: "/camera/color/image_raw"
   output_detections_topic: "/detections"
+  output_target_3d_topic: "/perception/target_3d"
 
 # -----------------------------------------------------------------------------
 # Camera Settings (only used in flight mode)
@@ -89,7 +100,10 @@ camera:
   rgb_width: 1280
   rgb_height: 720
   rgb_fps: 30
-  enable_depth: false        # Depth not needed for yaw tracking
+  depth_width: 1280          # Depth stream resolution
+  depth_height: 720
+  depth_fps: 30
+  enable_depth: true         # Required for 3D position estimation
   enable_imu: false
 
 # -----------------------------------------------------------------------------

@@ -19,6 +19,16 @@ Usage:
 
 Data Flow:
   mock_detector -> /detections -> tracking_node -> /target_yaw -> px4_converter_node -> /fmu/in/* -> PX4
+
+Topic Reference:
+  Published:
+    /detections             (vision_msgs/Detection2DArray) - Mock 2D detections
+    /camera/camera_info     (sensor_msgs/CameraInfo)       - Simulated camera intrinsics
+    /target_yaw             (std_msgs/Float32)             - Yaw rate command
+    /fmu/in/*               (px4_msgs/*)                   - PX4 offboard commands
+
+  Note: In sim mode, no depth or /perception/target_3d is published.
+        For 3D position testing, use flight mode with RealSense D455.
 """
 
 import os

@@ -63,22 +63,34 @@ Flight mode uses real camera input and YOLO detection.
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │   Perception    │────▶│    Tracking     │────▶│  PX4 Converter  │────▶│      PX4        │
-│  (mock/YOLO)    │     │  (YawErrorNode) │     │                 │     │  (SITL/Real)    │
+│ (RF-DETR/YOLO)  │     │  (YawErrorNode) │     │                 │     │  (SITL/Real)    │
 └─────────────────┘     └─────────────────┘     └─────────────────┘     └─────────────────┘
         │                       │                       │                       │
    /detections           /target_yaw             /fmu/in/*              Drone moves!
-   /camera/camera_info     (Float32)           (px4_msgs)
+   /perception/target_3d   (Float32)           (px4_msgs)
+   (with depth)
 ```
+
+**Detector Options:**
+- **RF-DETR** (default): Transformer-based detector, better occlusion handling
+- **YOLOv8**: CNN-based detector, faster inference
+
+**Depth Integration:** RealSense D455 depth is fused with detections, providing:
+- Depth field in `/detections` messages (meters)
+- Direct 3D position via `/perception/target_3d` (PointStamped)
 
 ### ROS2 Topics
 
 | Topic | Type | Description |
 |-------|------|-------------|
-| `/detections` | `vision_msgs/Detection2DArray` | Object detection results |
+| `/detections` | `vision_msgs/Detection2DArray` | Object detection results (with depth in pose.z) |
+| `/perception/target_3d` | `geometry_msgs/PointStamped` | 3D position of best detection (camera frame) |
 | `/camera/camera_info` | `sensor_msgs/CameraInfo` | Camera intrinsics |
 | `/target_yaw` | `std_msgs/Float32` | Yaw rate command (rad/s) |
 | `/fmu/in/offboard_control_mode` | `px4_msgs/OffboardControlMode` | PX4 control mode |
 | `/fmu/in/trajectory_setpoint` | `px4_msgs/TrajectorySetpoint` | Yaw/position setpoint |
+
+See [`docs/PERCEPTION_INTERFACE.md`](docs/PERCEPTION_INTERFACE.md) for detailed message formats and depth integration.
 
 ### Packages
 
@@ -96,6 +108,13 @@ All tunable parameters are in `config/airhound.yaml`:
 # Mode: "sim" or "flight"
 mode: "sim"
 
+# Perception settings (flight mode)
+perception:
+  detector_type: "rfdetr"      # "rfdetr" or "yolo"
+  model_path: "models/drone_rfdetr.engine"
+  confidence_threshold: 0.25
+  enable_depth: true           # Fuse RealSense depth with detections
+
 # Mock detector (sim mode)
 mock_detector:
   moving_target: true
@@ -112,6 +131,8 @@ px4:
   auto_arm: true
   publish_rate: 10.0  # Hz
 ```
+
+**Note:** The main config file is `config/airhound.yaml`. Package-specific configs in `ws_ros2/src/*/config/` are used by launch files but should match the main config.
 
 ## Project Structure
 

@@ -3,14 +3,14 @@
 AIRHOUND E2E Flight Launch File
 
 Launches the complete end-to-end pipeline for real flight:
-  1. RealSense Camera - Intel RealSense D455 RGB camera
-  2. Detector Node - YOLOv8/TensorRT object detection
+  1. RealSense Camera - Intel RealSense D455 RGB + Depth
+  2. Detector Node - RF-DETR/YOLOv8 with TensorRT (configurable)
   3. Tracking Node - Converts detections to yaw rate commands
   4. PX4 Converter - Sends yaw commands to PX4 via DDS
 
 Prerequisites:
-  - Intel RealSense camera connected
-  - YOLO model weights available (TensorRT engine or .pt file)
+  - Intel RealSense D455 camera connected
+  - Model weights available (TensorRT engine or PyTorch weights)
   - MicroXRCE-DDS Agent running
   - PX4 flight controller connected
   - Workspace built and sourced
@@ -21,7 +21,27 @@ Usage:
   ros2 launch airhound e2e_flight.launch.py max_rate:=0.5 auto_arm:=false
 
 Data Flow:
-  RealSense -> detector_node -> /detections -> tracking_node -> /target_yaw -> px4_converter_node -> /fmu/in/* -> PX4
+  RealSense D455
+    ├── RGB ──────────────► detector_node ──► /detections ─────────────────────┐
+    ├── Depth ────────────► detector_node ──► /perception/target_3d (3D pos)  │
+    └── CameraInfo ───────► detector_node                                      │
+                                                                                ▼
+                                              tracking_node ──► /target_yaw ──► px4_converter_node ──► PX4
+
+Topic Reference:
+  Published by detector_node:
+    /detections             (vision_msgs/Detection2DArray) - 2D bbox + depth in pose.z
+    /perception/target_3d   (geometry_msgs/PointStamped)   - 3D position in camera frame
+    /perception/latency_ms  (std_msgs/Float32)             - Inference latency
+    /perception/fps         (std_msgs/Float32)             - Current FPS
+
+  Published by tracking_node:
+    /target_yaw             (std_msgs/Float32)             - Yaw rate command (rad/s)
+
+  Published by px4_converter_node:
+    /fmu/in/*               (px4_msgs/*)                   - PX4 offboard commands
+
+  See docs/PERCEPTION_INTERFACE.md for detailed message formats.
 
 SAFETY WARNING:
   - Always test with auto_arm:=false first!
