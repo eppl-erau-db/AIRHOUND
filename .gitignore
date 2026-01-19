@@ -23,17 +23,11 @@ Thumbs.db
 # Logs
 *.log
 
-# Model files (too large for git)
-*.pt
-*.pth
-*.onnx
-*.engine
-models/*.pt
-models/*.pth
-models/*.onnx
-models/*.engine
+# Model files - handled by Git LFS for models/ directory
+# Exclude stray model files outside models/
+# models/*.pt, *.engine, etc are tracked via LFS (see .gitattributes)
 
-# Dataset files (too large for git)
+# Dataset files (too large even for LFS - use external storage)
 data/train/
 data/test/
 data/valid/
@@ -42,12 +36,10 @@ data/degradation_preview/
 data/*.yaml
 data/README.*.txt
 
-# Rosbags (too large for regular git - use external storage)
-# Small sample rosbags can be tracked via Git LFS if needed
-*.db3
-*.mcap
-data/samples/
-data/rosbags/
+# Rosbags - LFS tracks *.db3 and *.mcap files
+# Large training rosbag collections should use external storage
+# Small sample/test rosbags can go in data/rosbags/ via LFS
+data/samples/camera_validation_sample/  # 1.3GB sample - external storage
 
 # Benchmark raw outputs (keep summaries in data/analysis/)
 benchmark_results/

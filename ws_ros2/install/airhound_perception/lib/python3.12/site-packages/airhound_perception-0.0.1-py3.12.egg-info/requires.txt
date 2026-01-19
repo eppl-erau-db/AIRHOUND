@@ -1,5 +1,0 @@
-numpy<2.0,>=1.24
-setuptools
-
-[yolo]
-ultralytics>=8.0.0

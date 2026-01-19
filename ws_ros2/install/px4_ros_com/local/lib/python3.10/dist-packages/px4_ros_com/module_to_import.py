@@ -1,1 +1,0 @@
-/home/eppl/ws_ros2/src/px4_ros_com/px4_ros_com/module_to_import.py
