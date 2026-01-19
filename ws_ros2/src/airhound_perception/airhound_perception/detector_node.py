@@ -95,6 +95,10 @@ class PerceptionNode(Node):
         self.declare_parameter('depth_image_topic', '/camera/depth/image_raw')
         self.declare_parameter('depth_scale', 0.001)  # D455: mm to meters
         self.declare_parameter('depth_window_size', 5)  # Window for median depth sampling
+        
+        # Depth quality filtering params (D455 valid range: 0.4m - 6.0m)
+        self.declare_parameter('depth_min_range', 0.4)  # Minimum valid depth in meters
+        self.declare_parameter('depth_max_range', 6.0)  # Maximum valid depth in meters
 
         # ==================== GET PARAMETERS ====================
         input_topic = self.get_parameter('input_image_topic').get_parameter_value().string_value
@@ -109,6 +113,10 @@ class PerceptionNode(Node):
         depth_topic = self.get_parameter('depth_image_topic').get_parameter_value().string_value
         self.depth_scale = self.get_parameter('depth_scale').get_parameter_value().double_value
         self.depth_window_size = self.get_parameter('depth_window_size').get_parameter_value().integer_value
+        
+        # Depth quality filtering ranges
+        self.depth_min_range = self.get_parameter('depth_min_range').get_parameter_value().double_value
+        self.depth_max_range = self.get_parameter('depth_max_range').get_parameter_value().double_value
 
         # ==================== QOS PROFILES ====================
         qos_sensor = QoSProfile(
@@ -154,6 +162,7 @@ class PerceptionNode(Node):
                 qos_sensor
             )
             self.get_logger().info(f"Depth integration ENABLED, subscribing to {depth_topic}")
+            self.get_logger().info(f"Depth range filter: {self.depth_min_range:.2f}m - {self.depth_max_range:.2f}m")
         else:
             self.depth_sub = None
             self.get_logger().info("Depth integration DISABLED")
@@ -164,6 +173,7 @@ class PerceptionNode(Node):
         self.lat_pub = self.create_publisher(Float32, '/perception/latency_ms', qos_default)
         self.fps_pub = self.create_publisher(Float32, '/perception/fps', qos_default)
         self.depth_status_pub = self.create_publisher(Float32, '/perception/depth_available', qos_default)
+        self.depth_quality_pub = self.create_publisher(Float32, '/perception/depth_quality', qos_default)
 
         # ==================== STATE ====================
         self.last_pub_time: Optional[float] = None
@@ -171,6 +181,8 @@ class PerceptionNode(Node):
         self.bridge = CvBridge()
         self.cam_info: Optional[CameraInfo] = None
         self.depth_received_count = 0
+        self.depth_valid_count = 0  # Count of detections with valid depth in last frame
+        self.depth_total_count = 0  # Total detections in last frame
 
         # Load detector
         self.detector = self._load_detector()
@@ -332,8 +344,8 @@ class PerceptionNode(Node):
         # Apply scale factor (D455: mm -> m)
         depth_meters = depth_raw * self.depth_scale
         
-        # D455 valid range is ~0.4m to 6m
-        if depth_meters < 0.2 or depth_meters > 10.0:
+        # Filter by configured depth range (D455 default: 0.4m - 6.0m)
+        if depth_meters < self.depth_min_range or depth_meters > self.depth_max_range:
             return float('nan')
         
         return depth_meters
@@ -400,6 +412,8 @@ class PerceptionNode(Node):
         target_3d_msg = None  # Will hold 3D position of best detection
 
         if self.detector is None or cv_image is None:
+            self.depth_valid_count = 0
+            self.depth_total_count = 0
             return det_array, target_3d_msg
 
         detections = self.detector.infer(cv_image)
@@ -408,6 +422,10 @@ class PerceptionNode(Node):
         best_detection = None
         best_conf = 0.0
         best_3d = None
+        
+        # Track depth quality statistics
+        valid_depth_count = 0
+        total_depth_attempts = 0
         
         for d in detections:
             x1, y1, x2, y2 = d.xyxy
@@ -432,6 +450,11 @@ class PerceptionNode(Node):
             if self.enable_depth:
                 depth_m = self._extract_depth_at_point(int(center_u), int(center_v))
                 hyp.pose.pose.position.z = depth_m
+                
+                # Track depth quality
+                total_depth_attempts += 1
+                if not np.isnan(depth_m):
+                    valid_depth_count += 1
                 
                 # Also store pixel coords in x, y for convenience
                 # (Tracking team can use these with camera intrinsics for 3D)
@@ -458,6 +481,10 @@ class PerceptionNode(Node):
             target_3d_msg.point.x = best_3d[0]
             target_3d_msg.point.y = best_3d[1]
             target_3d_msg.point.z = best_3d[2]
+
+        # Store depth quality stats for publishing
+        self.depth_valid_count = valid_depth_count
+        self.depth_total_count = total_depth_attempts
 
         return det_array, target_3d_msg
 
@@ -488,6 +515,13 @@ class PerceptionNode(Node):
         # Depth status (1.0 if available, 0.0 if not)
         depth_available = 1.0 if self.latest_depth is not None else 0.0
         self.depth_status_pub.publish(Float32(data=depth_available))
+        
+        # Depth quality (ratio of valid depths in range, 0.0-1.0)
+        if self.depth_total_count > 0:
+            depth_quality = float(self.depth_valid_count) / float(self.depth_total_count)
+        else:
+            depth_quality = 0.0
+        self.depth_quality_pub.publish(Float32(data=depth_quality))
 
         self.last_pub_time = time.time()
 
@@ -519,6 +553,13 @@ class PerceptionNode(Node):
         # Depth status
         depth_available = 1.0 if self.latest_depth is not None else 0.0
         self.depth_status_pub.publish(Float32(data=depth_available))
+        
+        # Depth quality (ratio of valid depths in range, 0.0-1.0)
+        if self.depth_total_count > 0:
+            depth_quality = float(self.depth_valid_count) / float(self.depth_total_count)
+        else:
+            depth_quality = 0.0
+        self.depth_quality_pub.publish(Float32(data=depth_quality))
 
         self.last_pub_time = time.time()
 

@@ -42,6 +42,13 @@ data/degradation_preview/
 data/*.yaml
 data/README.*.txt
 
+# Rosbags (too large for regular git - use external storage)
+# Small sample rosbags can be tracked via Git LFS if needed
+*.db3
+*.mcap
+data/samples/
+data/rosbags/
+
 # Benchmark raw outputs (keep summaries in data/analysis/)
 benchmark_results/
 
