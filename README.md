@@ -444,14 +444,22 @@ source install/setup.bash
 3. Run integration tests: `python3 scripts/integration_test.py`
 4. Submit PR with description of changes
 
-### Team Roles
+### Team Structure
 
-| Role | Responsibility |
-|------|----------------|
-| Role 1 (Perception Lead) | Detection, depth integration, repo oversight |
-| Role 2 (Tracking) | Kalman filter, trajectory prediction |
-| Role 3 (Control) | PX4 interface, offboard control |
-| Role 4 (PINN) | Physics-informed neural network for prediction |
+| Role | Subteam | Responsibilities |
+|------|---------|------------------|
+| Perception + Project Lead | Perception & Tracking | RF-DETR, TensorRT, depth integration, project coordination |
+| Tracking/PINN (x2) | Perception & Tracking | Kalman filter, depth fusion, PINN development/training |
+| Co-Lead (Hardware Platform) | Systems & Flight | Hardware oversight, integration debugging |
+| Controls | Systems & Flight | PID tuning, control node, pitch/altitude implementation |
+| Flight Ops | Systems & Flight | Flight execution, safety protocols, data collection |
+| Middleware + QA | Systems & Flight | ROS2 integration, rosbags, SITL, test scenarios |
+
+### Subteams
+
+**Perception & Tracking:** RF-DETR integration, depth fusion, Kalman filter, PINN development
+
+**Systems & Flight:** PX4 tuning, flight testing, ROS2 integration, safety protocols
 
 ---
 
