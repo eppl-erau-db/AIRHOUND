@@ -17,6 +17,20 @@
 mode: "sim"
 
 # -----------------------------------------------------------------------------
+# Camera/Perception Source
+# -----------------------------------------------------------------------------
+# Controls where detections come from (independent of mode)
+# "realsense" - Use Intel RealSense camera + real object detection
+# "synthetic" - Use mock detector for testing without camera hardware
+#
+# Use cases:
+#   - mode: "sim",    camera_source: "synthetic"  -> SITL testing (default sim)
+#   - mode: "flight", camera_source: "realsense"  -> Real flight with camera
+#   - mode: "flight", camera_source: "synthetic"  -> Test PX4 control on real 
+#                                                    hardware without camera
+camera_source: "realsense"
+
+# -----------------------------------------------------------------------------
 # Mock Detector Settings (only used in sim mode)
 # -----------------------------------------------------------------------------
 # Generates synthetic detections for testing control algorithms

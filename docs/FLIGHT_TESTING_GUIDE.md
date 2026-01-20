@@ -133,7 +133,28 @@ Options:
 ./scripts/flight_launch.sh --arm
 ```
 
-### Option B: Manual Launch (Advanced)
+### Option B: Synthetic Mode Testing (No Camera)
+
+Use synthetic mode to test the PX4 control pipeline on real flight hardware **without a camera connected**. This is useful for:
+- Validating offboard control and communication
+- Testing tracking node behavior
+- Ground testing before adding camera hardware
+
+```bash
+# Flight mode with synthetic detections (no camera needed)
+./launch_airhound.sh flight --synthetic
+
+# Or via ROS2 launch directly
+ros2 launch launch/e2e_flight.launch.py camera_source:=synthetic
+```
+
+In synthetic mode:
+- Mock detector publishes simulated `/detections` at 30 Hz
+- Simulated camera_info is published for tracking node
+- Tracking node uses default intrinsics if needed
+- PX4 control pipeline works identically to real camera mode
+
+### Option C: Manual Launch (Advanced)
 
 ```bash
 # Terminal 1: Source workspace

@@ -109,15 +109,39 @@ Simulation uses synthetic detections - no camera or GPU needed:
 
 ### Flight Mode
 
-Flight mode uses RealSense camera and TensorRT-optimized RF-DETR:
+Flight mode controls a real drone with PX4 offboard commands:
 
 ```bash
 # Pre-flight validation
 python3 scripts/validate_camera.py
 python3 scripts/flight_preflight_check.py
 
-# Launch flight mode
+# Launch flight mode with RealSense camera (default)
 ./launch_airhound.sh flight
+
+# Launch flight mode with SYNTHETIC detections (no camera needed)
+# Useful for testing PX4 control pipeline on real hardware without camera
+./launch_airhound.sh flight --synthetic
+```
+
+### Camera Source Options
+
+The `camera_source` parameter controls where detections come from:
+
+| Option | Description | Use Case |
+|--------|-------------|----------|
+| `realsense` | Intel RealSense D455 + RF-DETR/YOLO | Production flight with real perception |
+| `synthetic` | Mock detector (no camera) | Testing control pipeline on real hardware |
+
+```bash
+# Via command line flag
+./launch_airhound.sh flight --synthetic
+
+# Via launch argument
+ros2 launch launch/e2e_flight.launch.py camera_source:=synthetic
+
+# Via config file (config/airhound.yaml)
+camera_source: "synthetic"
 ```
 
 ---
@@ -190,6 +214,11 @@ All parameters in `config/airhound.yaml`:
 ```yaml
 mode: "sim"  # "sim" or "flight"
 
+# Camera/Perception Source (independent of mode)
+# "realsense" - Use Intel RealSense camera + real object detection
+# "synthetic" - Use mock detector for testing without camera hardware
+camera_source: "realsense"
+
 perception:
   detector_type: "rfdetr"           # "rfdetr" or "yolo"
   model_path: "models/drone_rfdetr.engine"
@@ -202,6 +231,11 @@ perception:
 tracking:
   max_rate: 1.0                     # rad/s
   deadband: 0.01                    # rad
+  # Default camera intrinsics (used if no camera_info received)
+  default_fx: 615.0                 # Focal length x (pixels)
+  default_fy: 615.0                 # Focal length y (pixels)
+  default_cx: 640.0                 # Principal point x (1280/2)
+  default_cy: 360.0                 # Principal point y (720/2)
 
 px4:
   auto_arm: true
@@ -362,6 +396,9 @@ python3 scripts/validate_camera.py
 # Check RealSense streams
 ros2 topic hz /camera/color/image_raw
 ros2 topic hz /camera/depth/image_raw
+
+# If no camera available, use synthetic mode
+./launch_airhound.sh flight --synthetic
 ```
 
 ### Depth values are NaN

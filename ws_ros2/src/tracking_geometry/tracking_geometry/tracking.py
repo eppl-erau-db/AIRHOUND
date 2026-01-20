@@ -18,6 +18,17 @@ class YawErrorNode(Node):
         self.cy = None
         self.max_rate = self.declare_parameter("max_rate", 1.0).value
         self.deadband = self.declare_parameter("deadband", 0.01).value
+        
+        # Default camera intrinsics (used if no camera_info received)
+        # Based on Intel RealSense D455 @ 1280x720 with ~69° HFOV
+        self.default_fx = self.declare_parameter("default_fx", 615.0).value
+        self.default_fy = self.declare_parameter("default_fy", 615.0).value
+        self.default_cx = self.declare_parameter("default_cx", 640.0).value  # 1280/2
+        self.default_cy = self.declare_parameter("default_cy", 360.0).value  # 720/2
+        
+        # Flag to track if we've warned about using defaults
+        self.using_defaults = False
+        self.camera_info_received = False
 
         # State memory for predictive mode
         self.last_time = None
@@ -40,29 +51,53 @@ class YawErrorNode(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self.get_logger().info("YawErrorNode initialized.")
+        self.get_logger().info(
+            f"Default intrinsics: fx={self.default_fx:.1f}, fy={self.default_fy:.1f}, "
+            f"cx={self.default_cx:.1f}, cy={self.default_cy:.1f}"
+        )
 
     def camera_info_callback(self, msg: CameraInfo):
         self.fx = msg.k[0]
         self.fy = msg.k[4]
         self.cx = msg.k[2]
         self.cy = msg.k[5]
+        self.camera_info_received = True
         self.get_logger().info(
-            f"Camera intrinsics: fx={self.fx:.2f}, fy={self.fy:.2f}, cx={self.cx:.2f}, cy={self.cy:.2f}"
+            f"Camera intrinsics received: fx={self.fx:.2f}, fy={self.fy:.2f}, cx={self.cx:.2f}, cy={self.cy:.2f}"
         )
+    
+    def _get_intrinsics(self):
+        """Get camera intrinsics, falling back to defaults if not received."""
+        if self.camera_info_received:
+            return self.fx, self.fy, self.cx, self.cy
+        
+        # Use defaults and warn once
+        if not self.using_defaults:
+            self.get_logger().warn(
+                f"No camera_info received, using default intrinsics: "
+                f"fx={self.default_fx:.1f}, fy={self.default_fy:.1f}, "
+                f"cx={self.default_cx:.1f}, cy={self.default_cy:.1f}"
+            )
+            self.using_defaults = True
+        
+        return self.default_fx, self.default_fy, self.default_cx, self.default_cy
 
     def detection_callback(self, msg: Detection2DArray):
         now = self.get_clock().now()
         target_detected = False
 
-        if len(msg.detections) > 0 and None not in (self.fx, self.fy, self.cx, self.cy):
+        if len(msg.detections) > 0:
+            # Get intrinsics (from camera_info or defaults)
+            fx, fy, cx, cy = self._get_intrinsics()
+            
             # Pick detection with highest confidence
             detection = max(msg.detections, key=lambda d: d.results[0].hypothesis.score)
             u = detection.bbox.center.position.x
             v = detection.bbox.center.position.y
 
             # Pixel, angle (radians)
-            ex = (u - self.cx) / self.fx  # horizontal → yaw
-            ey = (v - self.cy) / self.fy  # vertical → pitch
+            ex = (u - cx) / fx  # horizontal → yaw
+            ey = (v - cy) / fy  # vertical → pitch
 
             yaw_err = ex  # control only yaw for now
 

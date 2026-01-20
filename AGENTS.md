@@ -14,8 +14,20 @@ AIRHOUND is an autonomous drone yaw-to-target tracking system using:
 Camera --> Detection --> Tracking --> PX4 Offboard --> Drone Yaw Control
    |           |             |              |
 RealSense   RF-DETR/     YawErrorNode   px4_converter
-            YOLOv8
+  or        YOLOv8 or
+Synthetic   MockDetector
 ```
+
+### Camera Source Modes
+
+The `camera_source` parameter controls where detections come from (independent of sim/flight mode):
+
+| camera_source | Description | Use Case |
+|---------------|-------------|----------|
+| `realsense` | Intel RealSense D455 + real detector | Production flight with real perception |
+| `synthetic` | Mock detector (no camera needed) | Testing control pipeline on real hardware |
+
+This allows testing the PX4 control pipeline on real flight hardware without needing a camera connected.
 
 ## Repository Structure
 

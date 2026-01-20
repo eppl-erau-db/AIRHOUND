@@ -39,6 +39,7 @@ BUILD_WORKSPACE=false
 CONFIG_FILE="${SCRIPT_DIR}/config/airhound.yaml"
 PX4_PATH="${HOME}/PX4-Autopilot"
 GAZEBO_TARGET="gz_x500"
+CAMERA_SOURCE=""  # Empty = use default for mode (synthetic for sim, realsense for flight)
 
 # Track background processes for cleanup
 PX4_PID=""
@@ -68,6 +69,9 @@ print_help() {
     echo "  --build           Rebuild ROS2 workspace before launching"
     echo "  --no-px4          Don't start PX4 SITL (assume already running)"
     echo "  --no-agent        Don't start MicroXRCE Agent (assume already running)"
+    echo "  --synthetic       Use synthetic/mock detector instead of real camera"
+    echo "                    (allows testing control pipeline without camera hardware)"
+    echo "  --realsense       Use RealSense camera (default for flight mode)"
     echo "  --config FILE     Use custom config file (default: config/airhound.yaml)"
     echo "  --px4-path PATH   PX4-Autopilot installation path (default: ~/PX4-Autopilot)"
     echo "  --help            Show this help message"
@@ -76,7 +80,8 @@ print_help() {
     echo "  $0 sim                          # Full simulation"
     echo "  $0 sim --no-px4                 # Sim (PX4 already running)"
     echo "  $0 sim --build                  # Rebuild and run sim"
-    echo "  $0 flight                       # Real flight mode"
+    echo "  $0 flight                       # Real flight mode with camera"
+    echo "  $0 flight --synthetic           # Flight mode without camera (synthetic detections)"
     echo "  $0 flight --no-agent            # Flight (agent already running)"
     echo ""
 }
@@ -324,13 +329,26 @@ launch_flight_mode() {
         start_microxrce_agent
     fi
     
+    # Determine camera source (default to realsense for flight mode)
+    local camera_arg=""
+    if [ -n "$CAMERA_SOURCE" ]; then
+        camera_arg="camera_source:=${CAMERA_SOURCE}"
+        echo -e "${BLUE}Using camera source: ${CAMERA_SOURCE}${NC}"
+    else
+        echo -e "${BLUE}Using camera source: realsense (default)${NC}"
+    fi
+    
     echo ""
     echo -e "${GREEN}Starting ROS2 E2E flight launch...${NC}"
     echo "Press Ctrl+C to stop"
     echo ""
     
-    # Launch the E2E flight mode
-    ros2 launch "${SCRIPT_DIR}/launch/e2e_flight.launch.py" &
+    # Launch the E2E flight mode with optional camera_source argument
+    if [ -n "$camera_arg" ]; then
+        ros2 launch "${SCRIPT_DIR}/launch/e2e_flight.launch.py" "$camera_arg" &
+    else
+        ros2 launch "${SCRIPT_DIR}/launch/e2e_flight.launch.py" &
+    fi
     ROS_PID=$!
     
     # Wait for ROS2 launch to finish
@@ -367,6 +385,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-agent)
             START_AGENT=false
+            shift
+            ;;
+        --synthetic)
+            CAMERA_SOURCE="synthetic"
+            shift
+            ;;
+        --realsense)
+            CAMERA_SOURCE="realsense"
             shift
             ;;
         --config)
