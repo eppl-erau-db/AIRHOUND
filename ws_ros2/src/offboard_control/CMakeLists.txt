@@ -7,6 +7,7 @@ endif()
 
 # Find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(px4_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -95,6 +96,12 @@ install(DIRECTORY
 install(DIRECTORY
   config
   DESTINATION share/${PROJECT_NAME}
+)
+
+# Install Python nodes
+install(PROGRAMS
+  src/px4_converter_node.py
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_package()

@@ -1,0 +1,55 @@
+# perception_dev.yaml
+# Development / rapid-iteration parameter set for the AIRHOUND perception node.
+#
+# Differences vs production (perception.yaml):
+#   * Lower inference resolution (imgsz: 640) for higher FPS and faster TensorRT export.
+#   * Same topics and frame IDs so you can swap YAMLs without changing downstream consumers.
+#   * Optionally uses a separate dev TensorRT engine (yolov8Detector_dev_640.engine) if you exported one.
+#
+# How to use:
+#   ros2 launch airhound_perception synthetic_test.launch.py params_file:=/absolute/path/to/perception_dev.yaml
+#   or in system launch (if you add a similar params_file arg):
+#   ros2 launch airhound_perception system.launch.py params_file:=/absolute/path/to/perception_dev.yaml
+#
+# To export a 640 engine (if you only have the 1280 one now):
+#   source venv/bin/activate
+#   export ULTRALYTICS_IGNORE_REQUIREMENTS=1
+#   python - <<'PY'
+#   from ultralytics import YOLO
+#   YOLO("models/yolov8Detector.pt").export(format="engine", half=True, imgsz=640, device=0)
+#   PY
+#   This will produce: models/yolov8Detector_dev_640.engine (if you used recover script variant) OR overwrite yolov8Detector.engine if you kept the same stem.
+#
+# If you did NOT create a separate dev engine file, set model_path below to "models/yolov8Detector.engine"
+# or back to the .pt model for quick experiments: "models/yolov8Detector.pt"
+
+perception_node:
+  ros__parameters:
+    # Input / output topics
+    input_image_topic: "/camera/color/image_raw"
+    output_detections_topic: "/detections"
+    camera_info_topic: "/camera/camera_info"
+
+    # Frame & publish settings
+    frame_id: "camera_color_optical_frame"
+    publish_rate_hz: 30.0
+
+    # Use compressed input if your camera driver provides it (saves bandwidth)
+    use_compressed: true
+
+    # Model selection:
+    # Preferred (if exported):  "models/yolov8Detector_dev_640.engine"
+    # Fallback engine:          "models/yolov8Detector.engine"
+    # PyTorch fallback:         "models/yolov8Detector.pt"
+    model_path: "models/yolov8Detector_dev_640.engine"
+
+    # Inference parameters
+    imgsz: 640          # Lower than prod (1280) for faster iteration
+    conf: 0.25
+    iou: 0.45
+    device: "0"         # "0" or "cuda:0" for GPU, "cpu" for CPU fallback
+
+    # Future extension knobs (uncomment if wired into node later):
+    # max_detections: 100
+    # publish_debug_image: false
+    # class_names_override: ["drone"]

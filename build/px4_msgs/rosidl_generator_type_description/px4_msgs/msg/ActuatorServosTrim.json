@@ -1,0 +1,36 @@
+{
+  "type_description_msg": {
+    "type_description": {
+      "type_name": "px4_msgs/msg/ActuatorServosTrim",
+      "fields": [
+        {
+          "name": "timestamp",
+          "type": {
+            "type_id": 9,
+            "capacity": 0,
+            "string_capacity": 0,
+            "nested_type_name": ""
+          },
+          "default_value": ""
+        },
+        {
+          "name": "trim",
+          "type": {
+            "type_id": 58,
+            "capacity": 8,
+            "string_capacity": 0,
+            "nested_type_name": ""
+          },
+          "default_value": ""
+        }
+      ]
+    },
+    "referenced_type_descriptions": []
+  },
+  "type_hashes": [
+    {
+      "type_name": "px4_msgs/msg/ActuatorServosTrim",
+      "hash_string": "RIHS01_8890209a65ae4dc9e2f3e997eb7796b5aa10f9b6f495131ed7fb66a6eec0f057"
+    }
+  ]
+}
