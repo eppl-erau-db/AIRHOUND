@@ -19,7 +19,7 @@
 set -euo pipefail
 
 # ===== Configuration =====
-AIRHOUND_ROOT="${HOME}/AIRHOUND"
+AIRHOUND_ROOT="${HOME}/workspace/AIRHOUND"
 WS_ROOT="${AIRHOUND_ROOT}/ws_ros2"
 LOG_DIR="${AIRHOUND_ROOT}/flight_logs"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
