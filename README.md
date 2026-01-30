@@ -63,7 +63,8 @@ RealSense D455 --> RF-DETR Detection --> 3D Kalman Filter --> PX4 Offboard --> D
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/eppl-erau-db/AIRHOUND.git
+# Clone with submodules (includes px4_msgs)
+git clone --recursive https://github.com/eppl-erau-db/AIRHOUND.git
 cd AIRHOUND
 
 # Install Git LFS (required for model files)
@@ -71,6 +72,8 @@ sudo apt install git-lfs
 git lfs install
 git lfs pull
 ```
+
+> **Note:** If you forgot `--recursive`, run: `git submodule update --init`
 
 ### 2. Install Dependencies
 
@@ -90,6 +93,11 @@ source /opt/ros/humble/setup.bash
 colcon build
 source install/setup.bash
 ```
+
+> **Note:** First build takes ~15 minutes on Jetson (px4_msgs generates 170+ message types).
+> The build may appear stuck at 0% initially - this is normal while generating headers.
+>
+> **Important:** Always run `colcon build` from the `ws_ros2/` directory, not the repo root.
 
 ---
 
@@ -304,6 +312,7 @@ AIRHOUND/
 │   ├── setup_dependencies.sh       # Dependency installer
 │   └── start_microxrce_agent.sh    # DDS agent launcher
 └── ws_ros2/src/
+    ├── px4_msgs/                   # PX4 ROS2 messages (git submodule)
     ├── airhound_perception/        # Detection + depth fusion
     ├── tracking_geometry/          # Kalman filter + yaw control
     └── offboard_control/           # PX4 interface
@@ -375,6 +384,27 @@ source install/setup.bash
 Or use the launcher with `--build`:
 ```bash
 ./launch_airhound.sh sim --build
+```
+
+### CMake cache errors (wrong directory paths)
+
+If you see errors like `The source directory "/home/other_user/..." does not exist`:
+
+```bash
+# Clean stale build artifacts and rebuild
+cd ws_ros2
+rm -rf build/ install/ log/
+source /opt/ros/humble/setup.bash
+colcon build
+```
+
+### Build hangs at 0%
+
+This is normal for the first build. The `px4_msgs` package generates 170+ message type headers before compilation starts. Wait ~15 minutes on Jetson. You can verify progress:
+
+```bash
+# Check if files are being generated
+ls ws_ros2/build/px4_msgs/rosidl_generator_cpp/px4_msgs/msg/ | wc -l
 ```
 
 ### Drone doesn't move
