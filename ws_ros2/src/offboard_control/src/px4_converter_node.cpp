@@ -134,13 +134,13 @@ private:
         // Publish trajectory setpoint with converted yaw
         publish_trajectory_setpoint(timestamp);
         
-        // Handle arming sequence
-        if (auto_arm_ && control_counter_ == 10) {
-            send_arm_command(timestamp);
-        } else if (auto_arm_ && control_counter_ == 50) {
-            send_offboard_command(timestamp);
+        // Handle arming sequence: PX4 requires setpoint streaming -> offboard -> arm
+        if (auto_arm_ && control_counter_ == 20) {
+            send_offboard_command(timestamp);  // Switch to offboard after ~2s of setpoints
+        } else if (auto_arm_ && control_counter_ == 30) {
+            send_arm_command(timestamp);        // Arm after offboard mode is active
         }
-        
+
         control_counter_++;
         
         // Publish status
@@ -163,10 +163,10 @@ private:
     
     void publish_offboard_control_mode(uint64_t timestamp) {
         px4_msgs::msg::OffboardControlMode msg;
-        msg.position = false;
+        msg.position = true;   // Position hold + yawspeed control
         msg.velocity = false;
         msg.acceleration = false;
-        msg.attitude = true;  // Use attitude control for yaw
+        msg.attitude = false;
         msg.body_rate = false;
         msg.timestamp = timestamp;
         

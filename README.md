@@ -74,6 +74,8 @@ git lfs pull
 ```
 
 > **Note:** If you forgot `--recursive`, run: `git submodule update --init`
+>
+> **Updating an existing clone:** When pulling updates, use `git pull origin main --recurse-submodules` to keep submodules in sync.
 
 ### 2. Install Dependencies
 
@@ -92,12 +94,14 @@ cd ws_ros2
 source /opt/ros/humble/setup.bash
 colcon build
 source install/setup.bash
+cd ..  # Return to AIRHOUND root (launch scripts run from here)
 ```
 
 > **Note:** First build takes ~15 minutes on Jetson (px4_msgs generates 170+ message types).
 > The build may appear stuck at 0% initially - this is normal while generating headers.
 >
 > **Important:** Always run `colcon build` from the `ws_ros2/` directory, not the repo root.
+> After building, return to the repository root (`cd ..`) — the launch scripts expect to run from `AIRHOUND/`.
 
 ---
 
@@ -114,6 +118,37 @@ Simulation uses synthetic detections - no camera or GPU needed:
 # If PX4 SITL is already running:
 ./launch_airhound.sh sim --no-px4
 ```
+
+### Recording Rosbags (SITL or Flight)
+
+A rosbag records all ROS2 topic data for later replay and analysis. To record during a simulation session, open a second terminal while the pipeline is running:
+
+```bash
+# Record the key pipeline topics during SITL
+ros2 bag record -o sitl_test_001 \
+    /detections \
+    /camera/camera_info \
+    /target_yaw \
+    /fmu/in/trajectory_setpoint \
+    /fmu/in/offboard_control_mode \
+    /fmu/in/vehicle_command
+
+# Or record ALL topics (larger files, but captures everything)
+ros2 bag record -a -o sitl_test_001
+```
+
+Inspect and replay recorded bags:
+
+```bash
+# Check what was recorded
+ros2 bag info sitl_test_001
+
+# Replay the recording (useful for testing downstream nodes)
+ros2 bag play sitl_test_001
+```
+
+> **Note:** For flight tests, `scripts/flight_launch.sh` automatically records rosbags
+> with compression. See [FLIGHT_TESTING_GUIDE.md](docs/FLIGHT_TESTING_GUIDE.md) for details.
 
 ### Flight Mode
 
@@ -134,12 +169,15 @@ python3 scripts/flight_preflight_check.py
 
 ### Camera Source Options
 
-The `camera_source` parameter controls where detections come from:
+The `camera_source` parameter controls where detections come from in **flight mode**:
 
 | Option | Description | Use Case |
 |--------|-------------|----------|
 | `realsense` | Intel RealSense D455 + RF-DETR/YOLO | Production flight with real perception |
 | `synthetic` | Mock detector (no camera) | Testing control pipeline on real hardware |
+
+> **Note:** In **sim mode**, the mock detector is always used regardless of `camera_source`.
+> The `camera_source` setting only affects flight mode.
 
 ```bash
 # Via command line flag
@@ -379,9 +417,10 @@ cd ws_ros2
 source /opt/ros/humble/setup.bash
 colcon build
 source install/setup.bash
+cd ..  # Return to AIRHOUND root before running launch scripts
 ```
 
-Or use the launcher with `--build`:
+Or use the launcher with `--build` (from the repo root):
 ```bash
 ./launch_airhound.sh sim --build
 ```
@@ -396,6 +435,8 @@ cd ws_ros2
 rm -rf build/ install/ log/
 source /opt/ros/humble/setup.bash
 colcon build
+source install/setup.bash
+cd ..  # Return to AIRHOUND root
 ```
 
 ### Build hangs at 0%
