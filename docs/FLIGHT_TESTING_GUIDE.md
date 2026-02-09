@@ -169,7 +169,7 @@ MicroXRCEAgent udp4 -p 8888
 ros2 launch airhound_perception full_pipeline.launch.py detector:=rfdetr
 
 # Terminal 4: Monitor detections
-ros2 topic echo /perception/detections
+ros2 topic echo /detections
 
 # Terminal 5: Record rosbag
 ros2 bag record -a -o flight_test_001
@@ -179,10 +179,10 @@ ros2 bag record -a -o flight_test_001
 
 ```bash
 # Watch detection rate
-ros2 topic hz /perception/detections
+ros2 topic hz /detections
 
 # Monitor yaw commands
-ros2 topic echo /tracking/yaw_error
+ros2 topic echo /target_yaw
 
 # Check PX4 setpoints
 ros2 topic echo /fmu/in/trajectory_setpoint
@@ -221,7 +221,7 @@ ros2 bag record --serialization-format cdr \
 
 ### Key Metrics to Review
 1. **Detection Rate:** Should be ~25 FPS for RF-DETR
-2. **Detection Latency:** Check timestamps in `/perception/detections`
+2. **Detection Latency:** Check timestamps in `/detections`
 3. **Tracking Stability:** Review yaw rate commands for oscillation
 4. **Depth Accuracy:** Compare depth readings vs ground truth
 
@@ -351,8 +351,8 @@ detector_node:
 |-------|------|------|-------------|
 | `/camera/color/image_raw` | Image | 30Hz | RGB camera feed |
 | `/camera/depth/image_raw` | Image | 30Hz | Depth image (uint16) |
-| `/perception/detections` | Detection2DArray | ~25Hz | Drone detections |
-| `/tracking/yaw_error` | Float64 | ~25Hz | Yaw rate command |
+| `/detections` | Detection2DArray | ~25Hz | Drone detections |
+| `/target_yaw` | Float32 | ~25Hz | Yaw rate command |
 | `/fmu/in/trajectory_setpoint` | TrajectorySetpoint | 10Hz | PX4 commands |
 
 ---

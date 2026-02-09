@@ -44,5 +44,4 @@ data/samples/camera_validation_sample/  # 1.3GB sample - external storage
 # Benchmark raw outputs (keep summaries in data/analysis/)
 benchmark_results/
 
-# External ROS2 packages (cloned separately)
-ws_ros2/src/px4_msgs/
+# px4_msgs is tracked as a git submodule

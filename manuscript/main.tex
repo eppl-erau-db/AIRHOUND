@@ -1,0 +1,274 @@
+% SPIE Defense + Security 2026
+% Paper ID: 14030-26
+% Track: DS112 - Machine Learning from Challenging Data
+%
+% Title: Predictive Target Pursuit for Autonomous UAVs using RF-DETR
+%        with Depth-Aware State Estimation and Physics-Informed
+%        Trajectory Prediction
+%
+% Use SPIE Proceedings template: \documentclass[]{spieproc}
+% For now, using article class as scaffold. Switch to spieproc for submission.
+
+\documentclass[11pt,letterpaper]{article}
+
+% --- Page layout (approximate SPIE format) ---
+\usepackage[margin=1in]{geometry}
+
+% --- Fonts ---
+\usepackage{times}
+\usepackage[T1]{fontenc}
+
+% --- Math ---
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+% --- Graphics ---
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{subcaption}
+
+% --- Tables ---
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+
+% --- Units ---
+\usepackage{siunitx}
+\sisetup{per-mode=symbol}
+
+% --- Code / topic names ---
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\small, breaklines=true}
+
+% --- Citations ---
+\usepackage[numbers,sort&compress]{natbib}
+
+% --- Hyperlinks ---
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+
+% --- Captions ---
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf}
+
+% ============================================================================
+\begin{document}
+
+\title{Predictive Target Pursuit for Autonomous UAVs using RF-DETR with Depth-Aware State Estimation and Physics-Informed Trajectory Prediction}
+
+\author{
+    % Author list TBD - add all team members
+    % Embry-Riddle Aeronautical University, Daytona Beach, FL
+}
+
+\date{}
+\maketitle
+
+% ============================================================================
+\begin{abstract}
+% TODO: Write after all sections are drafted (Lead owns this)
+\end{abstract}
+
+% ============================================================================
+\section{Introduction}
+\label{sec:intro}
+% TODO: Lead + Tracking team (PINN lit review)
+% - Motivation: autonomous UAV pursuit in degraded visual conditions
+% - Gap: CNN detectors degrade under noise/blur, reactive control fails during dropouts
+% - Contribution summary (5 novel elements from roadmap)
+
+% ============================================================================
+\section{Related Work}
+\label{sec:related}
+% TODO: Lead + Tracking team
+% - Object detection on embedded platforms (YOLO family, DETR family)
+% - Visual tracking and state estimation (Kalman, depth fusion)
+% - Physics-informed neural networks for trajectory prediction
+% - UAV pursuit and visual servoing
+
+% ============================================================================
+\section{System Architecture}
+\label{sec:architecture}
+% TODO: Middleware + QA (primary), Perception, Tracking, Controls contribute
+% - ROS2 pipeline overview
+% - Hardware platform (Jetson Orin, D455, PX4)
+% - Node graph and data flow
+
+% ============================================================================
+\section{RF-DETR Detection and Degradation Robustness}
+\label{sec:rfdetr}
+
+% === THIS IS THE PERCEPTION LEAD'S SECTION ===
+
+\subsection{Model Selection}
+\label{sec:model_selection}
+
+We evaluate two object detection architectures for onboard UAV detection: YOLOv8n~\cite{ultralytics2023}, a single-stage CNN-based detector, and RF-DETR~\cite{rfdetr2025}, a transformer-based detection model built on a DINOv2~\cite{oquab2024dinov2} vision encoder with a DETR-style~\cite{carion2020detr} decoder. The selection of these architectures is motivated by the distinct computational paradigms they represent: YOLOv8n processes features through convolutional layers with local receptive fields, while RF-DETR leverages self-attention mechanisms that aggregate global context across the input image.
+
+This architectural distinction has implications for robustness under degraded visual conditions. Convolutional networks rely on local spatial patterns that are directly disrupted by pixel-level noise, low-light conditions, and motion blur. In contrast, the attention mechanism in transformer-based detectors can integrate information from unaffected regions of the image, potentially maintaining detection accuracy when portions of the input are corrupted.
+
+\subsection{Training Configuration}
+\label{sec:training}
+
+Both models are trained on a drone detection dataset comprising 13{,}869 training images and 1{,}983 validation images sourced from the Roboflow Drones dataset~\cite{roboflowdrones}, annotated with a single class (\texttt{drone}).
+
+The RF-DETR base variant is used, consisting of a DINOv2 windowed-small encoder with a 3-layer decoder (256 hidden dimension, 300 queries). The model is initialized from COCO-pretrained weights and fine-tuned for 50 epochs with the Adam optimizer (learning rate $1 \times 10^{-4}$, weight decay $1 \times 10^{-4}$), gradient clipping at 0.1 max norm, and 5 warmup epochs. Mixed-precision training (FP16) is used with an effective batch size of 4 on an NVIDIA RTX 4070 (12~GB VRAM). Data augmentation includes mosaic and mixup.
+
+YOLOv8n is trained using the Ultralytics framework with default hyperparameters on the same dataset for a fair comparison.
+
+\subsection{Edge Deployment via TensorRT}
+\label{sec:tensorrt}
+
+For real-time inference on the NVIDIA Jetson Orin (16~GB)~\cite{jetsonorin}, both models are converted to TensorRT~\cite{tensorrt} FP16 engines. The RF-DETR conversion pipeline proceeds as:
+%
+\begin{enumerate}
+    \item PyTorch checkpoint $\rightarrow$ ONNX (opset 17, input $560 \times 560$)
+    \item ONNX graph simplification via \texttt{onnx-simplifier}
+    \item ONNX $\rightarrow$ TensorRT engine via \texttt{trtexec} with FP16 and 4~GB workspace
+\end{enumerate}
+%
+The resulting RF-DETR TensorRT engine is 57~MB and achieves approximately 25~FPS on the Jetson Orin, compared to approximately 1~FPS for the ONNX model on CPU. YOLOv8n TensorRT achieves approximately 30~FPS at $640 \times 640$ input resolution. Both frame rates exceed the 30~Hz camera capture rate, ensuring real-time operation.
+
+\subsection{Synthetic Degradation Pipeline}
+\label{sec:degradation_pipeline}
+
+To evaluate robustness under challenging visual conditions---the central theme of the SPIE DS112 track---we apply synthetic degradation to the validation set. Four degradation types are evaluated at five severity levels ($s \in \{0.0, 0.25, 0.5, 0.75, 1.0\}$), where $s = 0.0$ represents the clean baseline:
+
+\begin{itemize}
+    \item \textbf{Gaussian noise:} Additive noise with standard deviation $\sigma = s \cdot 50$ (pixel intensity scale 0--255), simulating sensor noise in low-SNR conditions.
+    \item \textbf{Low light:} Multiplicative brightness reduction by factor $(1 - 0.9s)$, simulating twilight or shadowed environments.
+    \item \textbf{Motion blur:} Directional kernel blur with kernel size $k = \lfloor 20s \rfloor + 1$ pixels, simulating camera or target motion artifacts.
+    \item \textbf{Partial occlusion:} Random rectangular patches covering up to $s \cdot 50\%$ of the bounding box area, simulating environmental obstructions.
+\end{itemize}
+
+Each degradation is applied independently to all 1{,}983 validation images, yielding $2 \times 4 \times 5 = 40$ unique evaluation conditions (2 models $\times$ 4 degradation types $\times$ 5 severities).
+
+\subsection{Degradation Robustness Results}
+\label{sec:degradation_results}
+
+\subsubsection{Clean Baseline}
+
+On clean (undegraded) images, both models achieve comparable performance (Table~\ref{tab:clean_baseline}). YOLOv8n holds a marginal advantage in mAP@0.5 (0.957 vs.\ 0.953) and recall (0.971 vs.\ 0.931), while RF-DETR achieves higher precision (0.949 vs.\ 0.922). This establishes that any performance differences under degradation are attributable to architectural robustness rather than baseline capability gaps.
+
+\input{tables/clean_baseline}
+
+\subsubsection{Performance Under Degradation}
+
+Figure~\ref{fig:degradation} shows mAP@0.5 as a function of severity level for each degradation type. Two patterns emerge clearly:
+
+\begin{enumerate}
+    \item \textbf{Gaussian noise and low light:} RF-DETR maintains significantly higher accuracy as severity increases. At maximum Gaussian noise severity ($s = 1.0$), RF-DETR achieves 0.716 mAP@0.5 compared to YOLOv8n's 0.318---a +39.8 percentage point advantage. Under maximum low-light conditions, the advantage is +39.4 points (0.670 vs.\ 0.275). RF-DETR retains 75\% and 70\% of its clean-baseline performance at maximum noise and low-light severity respectively, while YOLOv8n retains only 33\% and 29\% (Figure~\ref{fig:retention}).
+
+    \item \textbf{Motion blur and occlusion:} Both models are significantly impacted by severe motion blur, with mAP dropping below 0.20 at $s \geq 0.75$. RF-DETR maintains a moderate advantage at low blur severity (+13.9 points at $s = 0.25$), but neither architecture alone can sustain detection at high blur levels. Occlusion performance is comparable, with both models handling partial obstructions gracefully.
+\end{enumerate}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{degradation_comparison.pdf}
+    \caption{Detection accuracy (mAP@0.5) under four degradation types at increasing severity. RF-DETR (orange squares) demonstrates substantially higher robustness than YOLOv8n (blue circles) under Gaussian noise and low-light conditions. Shaded region indicates RF-DETR advantage.}
+    \label{fig:degradation}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{retention_curve.pdf}
+    \caption{Percentage of clean-baseline mAP@0.5 retained under increasing degradation severity for Gaussian noise and low light---the two conditions with the largest architectural performance gap.}
+    \label{fig:retention}
+\end{figure}
+
+The advantage heatmap (Figure~\ref{fig:heatmap}) provides a complete summary across all conditions. The delta mAP values confirm that RF-DETR's advantage scales with severity: near-zero difference on clean data, growing to $\sim$+0.40 under severe noise and low-light conditions.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.75\textwidth]{advantage_heatmap.pdf}
+    \caption{Heatmap of mAP@0.5 difference (RF-DETR $-$ YOLOv8n) across all degradation types and severity levels. Green cells indicate RF-DETR outperformance.}
+    \label{fig:heatmap}
+\end{figure}
+
+Table~\ref{tab:degradation_avg} summarizes the average mAP@0.5 across all severity levels for each degradation type. RF-DETR achieves +17.8 and +13.4 average mAP advantage under Gaussian noise and low light respectively.
+
+\input{tables/degradation_averaged}
+
+\subsubsection{Implications for System Design}
+
+These results inform two key architectural decisions:
+
+\begin{enumerate}
+    \item \textbf{Detector selection:} RF-DETR is selected as the primary detector for flight operations. Its robustness advantage under noise and lighting variation---conditions frequently encountered in outdoor UAV operations---outweighs YOLOv8n's marginal clean-data and speed advantages. Both models are retained in the pipeline, switchable via configuration, to enable comparative flight testing.
+
+    \item \textbf{Complementary prediction:} The severe performance degradation of both models under motion blur ($<$0.20 mAP at $s \geq 0.75$) motivates the integration of a predictive tracking component. Detection dropouts during blur events must be bridged by Kalman filtering and PINN-based trajectory prediction (Sections~\ref{sec:depth} and~\ref{sec:pinn}).
+\end{enumerate}
+
+% ============================================================================
+\section{Depth Integration and 3D State Estimation}
+\label{sec:depth}
+% TODO: Tracking team (primary), Perception contributes
+% - D455 depth subscriber and fusion
+% - 2D bbox + depth -> 3D position via camera intrinsics
+% - 3D Kalman filter: [x, y, z, vx, vy, vz]
+% - Depth accuracy characterization
+
+% ============================================================================
+\section{Physics-Informed Trajectory Prediction}
+\label{sec:pinn}
+% TODO: Tracking team
+% - PINN architecture (MLP, input/output spec)
+% - Physics loss function (velocity constraint)
+% - Training pipeline (SITL + real data)
+% - Dropout recovery mechanism
+% - Online update proof-of-concept (if applicable)
+
+% ============================================================================
+\section{Anticipatory Control}
+\label{sec:control}
+% TODO: Controls (primary), Tracking team contributes
+% - 3D control node: yaw + pitch viewing + altitude
+% - PID structure for each axis
+% - Safety limits and failsafe behavior
+% - PINN-driven anticipatory commands during dropout
+
+% ============================================================================
+\section{Experimental Setup}
+\label{sec:experiments}
+% TODO: Flight Ops (primary), Middleware + QA
+% - Hardware platform description
+% - Flight test matrix
+% - SITL validation setup
+% - Data collection methodology
+
+% ============================================================================
+\section{Results}
+\label{sec:results}
+% TODO: Lead (primary), all contribute data
+% - Detection comparison (flight data)
+% - Tracking accuracy (dropout duration, recovery time)
+% - PINN vs Kalman prediction comparison
+% - Control performance (yaw, pitch, altitude error)
+% - Combined system performance
+
+% ============================================================================
+\section{Discussion}
+\label{sec:discussion}
+% TODO: Lead
+% - Key findings synthesis
+% - Limitations
+% - Comparison with prior work
+
+% ============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+% TODO: Lead
+% - Summary of contributions
+% - Future work (full autonomy, multi-target, etc.)
+
+% ============================================================================
+\section*{Acknowledgments}
+% Faculty advisor: Dr. Drakunov
+% EPPL Lab, Embry-Riddle Aeronautical University
+% SPIE Student Conference Support (if awarded)
+
+% ============================================================================
+\bibliographystyle{unsrtnat}
+\bibliography{references}
+
+\end{document}

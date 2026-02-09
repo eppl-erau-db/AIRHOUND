@@ -19,10 +19,10 @@
 set -euo pipefail
 
 # ===== Configuration =====
-AIRHOUND_ROOT="${HOME}/AIRHOUND"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AIRHOUND_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 WS_ROOT="${AIRHOUND_ROOT}/ws_ros2"
 LOG_DIR="${AIRHOUND_ROOT}/flight_logs"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Colors
 RED='\033[0;31m'
@@ -227,9 +227,13 @@ if [[ "$RECORD_BAG" == "true" ]]; then
         "/camera/color/image_raw"
         "/camera/depth/image_raw"
         "/camera/camera_info"
-        "/perception/detections"
-        "/tracking/yaw_error"
+        "/detections"
+        "/perception/target_3d"
+        "/perception/depth_quality"
+        "/perception/fps"
+        "/target_yaw"
         "/fmu/in/trajectory_setpoint"
+        "/fmu/in/offboard_control_mode"
         "/fmu/out/vehicle_local_position"
         "/fmu/out/vehicle_attitude"
     )
