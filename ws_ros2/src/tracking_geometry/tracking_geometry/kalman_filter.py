@@ -1,9 +1,4 @@
 #!/usr/bin/env python3
-import numpy as np
-from typing import Tuple
-from dataclasses import dataclass
-
-
 """
 3D Kalman Filter.
 
