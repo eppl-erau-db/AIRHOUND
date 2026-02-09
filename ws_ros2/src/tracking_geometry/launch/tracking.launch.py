@@ -3,7 +3,7 @@
 Launch file for AIRHOUND tracking node.
 
 Subscribes to /detections and /camera/camera_info
-Publishes /target_yaw for offboard control
+Publishes /yaw_command for offboard control
 """
 
 from launch import LaunchDescription
@@ -40,7 +40,7 @@ def generate_launch_description():
             # Explicit topic remappings for clarity
             ('/detections', '/detections'),
             ('/camera/camera_info', '/camera/camera_info'),
-            ('/target_yaw', '/target_yaw'),
+            ('/yaw_command', '/yaw_command'),
         ]
     )
 

@@ -4,7 +4,7 @@ from sensor_msgs.msg import CameraInfo
 from vision_msgs.msg import Detection2DArray
 
 
-from std_msgs.msg import Float32
+from std_msgs.msg import Float64
 import numpy as np
 import tf2_ros
 
@@ -47,8 +47,8 @@ class YawErrorNode(Node):
             Detection2DArray, "/detections", self.detection_callback, 10
         )
 
-        # Publisher
-        self.pub_yaw = self.create_publisher(Float32, "/target_yaw", 10)
+        # Publisher — matches offboard_control subscriber on /yaw_command (Float64)
+        self.pub_yaw = self.create_publisher(Float64, "/yaw_command", 10)
 
         # TF2 for camera → body frame (optional)
         self.tf_buffer = tf2_ros.Buffer()
@@ -110,8 +110,7 @@ class YawErrorNode(Node):
             if abs(yaw_rate) < self.deadband:
                 yaw_rate = 0.0
 
-            # Yaw are publishing
-            self.pub_yaw.publish(Float32(data=yaw_rate))
+            self.pub_yaw.publish(Float64(data=float(yaw_rate)))
             self.get_logger().info(
                 f"[Detection] u={u:.1f}, v={v:.1f}, ex={ex:.4f}, ey={ey:.4f} → yaw_rate={yaw_rate:.4f}"
             )
@@ -129,7 +128,7 @@ class YawErrorNode(Node):
             )
             if abs(predicted_yaw) < self.deadband:
                 predicted_yaw = 0.0
-            self.pub_yaw.publish(Float32(data=predicted_yaw))
+            self.pub_yaw.publish(Float64(data=float(predicted_yaw)))
             self.get_logger().warn(
                 f"[Predictive] target lost → yaw_rate={predicted_yaw:.4f}"
             )
