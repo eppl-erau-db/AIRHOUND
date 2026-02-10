@@ -89,10 +89,44 @@
 % ============================================================================
 \section{System Architecture}
 \label{sec:architecture}
-% TODO: Middleware + QA (primary), Perception, Tracking, Controls contribute
-% - ROS2 pipeline overview
-% - Hardware platform (Jetson Orin, D455, PX4)
-% - Node graph and data flow
+
+The AIRHOUND system integrates perception, state estimation, trajectory prediction, and flight control into a real-time pipeline for autonomous UAV target pursuit. Figure~\ref{fig:architecture} shows the complete data flow. All processing runs onboard an NVIDIA Jetson Orin (16~GB) with ROS~2 Humble~\cite{ros2humble,ros2design} as the communication middleware.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{system_architecture.pdf}
+    \caption{AIRHOUND system architecture. The Intel RealSense D455 provides synchronized RGB and depth streams. The detection node (RF-DETR or YOLOv8, selectable via configuration) publishes 2D bounding boxes that are fused with depth to produce 3D position estimates. A 6-state Kalman filter produces smoothed position and velocity, which feeds a PINN for trajectory prediction during detection dropout. The control node commands yaw, pitch viewing angle, and altitude via PX4 offboard mode. A dashed arrow indicates the Kalman-only fallback path when PINN prediction is unavailable.}
+    \label{fig:architecture}
+\end{figure}
+
+\subsection{Hardware Platform}
+\label{sec:hardware}
+
+The UAV platform is a custom quadrotor running PX4~\cite{px4docs} firmware with an NVIDIA Jetson Orin (16~GB) as the companion computer. An Intel RealSense D455~\cite{realsensed455} stereo depth camera provides synchronized RGB ($1280 \times 720$, 30~Hz) and depth ($1280 \times 720$, 30~Hz) streams. The D455's active infrared stereo provides depth measurements in the 0.4--6.0~m range with approximately 1--2\% depth error relative to distance.
+
+Communication between ROS~2 and PX4 is handled by the Micro~XRCE-DDS bridge~\cite{eprosimadds}, which translates between DDS topics and PX4's internal uORB messaging. The bridge runs over UDP on port 8888, enabling the ROS~2 nodes to publish \texttt{TrajectorySetpoint} messages and receive vehicle state at 10~Hz.
+
+\subsection{ROS~2 Pipeline}
+\label{sec:ros2_pipeline}
+
+The pipeline consists of five primary nodes:
+
+\begin{enumerate}
+    \item \textbf{Detection Node} (\texttt{perception\_node}): Subscribes to \texttt{/camera/color/image\_raw}, runs inference through either the RF-DETR or YOLOv8 TensorRT engine (selected via \texttt{airhound.yaml}), and publishes \texttt{Detection2DArray} messages on \texttt{/detections}. When depth integration is enabled, the node also subscribes to \texttt{/camera/depth/image\_raw}, extracts depth at each bounding box center using a $5 \times 5$ median filter for noise robustness, and embeds the depth value in each detection's pose field.
+
+    \item \textbf{Depth Fusion}: Integrated within the detection node. For each detection, the 2D bounding box center $(u, v)$ and depth $Z$ are projected to 3D camera-frame coordinates using the pinhole camera model: $X = (u - c_x) Z / f_x$, $Y = (v - c_y) Z / f_y$. The highest-confidence detection's 3D position is published on \texttt{/perception/target\_3d} as a \texttt{PointStamped} message.
+
+    \item \textbf{Tracking Node} (\texttt{yaw\_error\_node}): Subscribes to \texttt{/detections}, computes horizontal pixel offset from image center, converts to angular error using camera intrinsics, and publishes yaw rate commands on \texttt{/yaw\_command}. Includes a proportional controller with configurable deadband and rate limits. When detections are absent, the node applies last-rate extrapolation as a short-term prediction.
+
+    \item \textbf{3D Kalman Filter}: A 6-state constant-velocity filter with state vector $\mathbf{x} = [x, y, z, v_x, v_y, v_z]^\top$. The filter uses a standard predict-update cycle with a discrete white noise acceleration process model. Mahalanobis gating rejects outlier measurements (threshold: $\chi^2_{3,0.997} \approx 3.0$), and the filter resets after 30 consecutive missed detections ($\sim$1~s at 30~Hz).
+
+    \item \textbf{Control Node} (\texttt{yaw\_controller\_node}): A C++ node that subscribes to \texttt{/yaw\_command}, constructs PX4 \texttt{TrajectorySetpoint} messages, and streams them at 10~Hz to maintain offboard mode. The current implementation controls yaw only; altitude and pitch viewing extensions are staged for Weeks~5--8 of the development timeline.
+\end{enumerate}
+
+\subsection{Model Selection via Configuration}
+\label{sec:model_config}
+
+A central configuration file (\texttt{airhound.yaml}) controls detector selection (\texttt{detector\_type}: \texttt{"rfdetr"} or \texttt{"yolo"}), model path, confidence threshold, depth integration parameters, and PX4 control settings. This enables rapid switching between models during comparative flight testing without code changes, ensuring identical test conditions for both detectors.
 
 % ============================================================================
 \section{RF-DETR Detection and Degradation Robustness}
@@ -202,11 +236,74 @@ These results inform two key architectural decisions:
 % ============================================================================
 \section{Depth Integration and 3D State Estimation}
 \label{sec:depth}
-% TODO: Tracking team (primary), Perception contributes
-% - D455 depth subscriber and fusion
-% - 2D bbox + depth -> 3D position via camera intrinsics
-% - 3D Kalman filter: [x, y, z, vx, vy, vz]
-% - Depth accuracy characterization
+
+Monocular object detection alone provides only 2D image-plane localization. To enable 3D control (altitude hold, pitch viewing), the system fuses 2D detections with stereo depth from the RealSense D455.
+
+\subsection{Depth Extraction and Filtering}
+\label{sec:depth_extraction}
+
+For each detection bounding box, the system extracts depth at the box center pixel $(u_c, v_c)$. To mitigate stereo matching noise---particularly at object edges and at ranges beyond 3~m---a $5 \times 5$ median filter is applied over a window centered on $(u_c, v_c)$. Only depth values within the D455's reliable operating range (0.4--6.0~m) are accepted; values outside this range are flagged as invalid and downstream consumers receive \texttt{NaN}.
+
+The D455 publishes 16-bit unsigned depth images in millimeters. A configurable scale factor ($\alpha = 0.001$) converts to meters:
+\begin{equation}
+    Z = \alpha \cdot \text{median}\left(\mathbf{D}[v_c \pm 2, u_c \pm 2]\right)
+    \label{eq:depth}
+\end{equation}
+where $\mathbf{D}$ is the depth image and the window excludes zero-valued (invalid) pixels before computing the median.
+
+\subsection{3D Projection}
+\label{sec:projection}
+
+Given a valid depth $Z$ and camera intrinsics $(f_x, f_y, c_x, c_y)$ from the \texttt{CameraInfo} topic, the 3D position in the camera optical frame is computed using the pinhole model:
+\begin{equation}
+    X = \frac{(u_c - c_x) \cdot Z}{f_x}, \quad
+    Y = \frac{(v_c - c_y) \cdot Z}{f_y}, \quad
+    Z = Z
+    \label{eq:projection}
+\end{equation}
+The resulting $(X, Y, Z)$ is published as a \texttt{PointStamped} message on \texttt{/perception/target\_3d} in the \texttt{camera\_color\_optical\_frame} coordinate frame, where $+X$ is right, $+Y$ is down, and $+Z$ is forward (into the scene).
+
+\subsection{3D Kalman Filter}
+\label{sec:kalman}
+
+A 6-state constant-velocity Kalman filter~\cite{kalmanfilter1960} estimates the target's 3D position and velocity from noisy depth-fused measurements. The state vector is:
+\begin{equation}
+    \mathbf{x} = [x, y, z, v_x, v_y, v_z]^\top
+\end{equation}
+
+\subsubsection{Motion Model}
+
+The state transition follows a constant-velocity assumption:
+\begin{equation}
+    \mathbf{x}_{k+1} = \mathbf{F}(\Delta t) \, \mathbf{x}_k + \mathbf{w}_k, \quad
+    \mathbf{F} = \begin{bmatrix}
+        \mathbf{I}_3 & \Delta t \, \mathbf{I}_3 \\
+        \mathbf{0}_3 & \mathbf{I}_3
+    \end{bmatrix}
+\end{equation}
+where $\Delta t$ is the inter-frame interval and $\mathbf{w}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{Q})$ is the process noise. The process noise covariance uses a diagonal model with separate position and velocity noise terms, tuned based on expected target maneuverability.
+
+\subsubsection{Measurement Model}
+
+The measurement vector $\mathbf{z}_k = [x, y, z]^\top$ is the 3D position from depth fusion. The observation matrix $\mathbf{H} = [\mathbf{I}_3 \;\; \mathbf{0}_3]$ selects the position components. The measurement noise covariance $\mathbf{R}$ is set based on D455 depth accuracy characteristics: approximately $\sigma_z \approx 0.01 Z$ for the depth axis and $\sigma_{x,y} \approx Z / f$ for the lateral axes, where $f$ is the focal length in pixels.
+
+\subsubsection{Update and Gating}
+
+The filter uses the Joseph-form covariance update for numerical stability:
+\begin{equation}
+    \mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}_k \mathbf{H}) \, \mathbf{P}_{k|k-1} \, (\mathbf{I} - \mathbf{K}_k \mathbf{H})^\top + \mathbf{K}_k \mathbf{R} \mathbf{K}_k^\top
+\end{equation}
+
+Outlier measurements are rejected using a Mahalanobis distance gate:
+\begin{equation}
+    d_M = \sqrt{(\mathbf{z}_k - \mathbf{H}\hat{\mathbf{x}}_{k|k-1})^\top \mathbf{S}_k^{-1} (\mathbf{z}_k - \mathbf{H}\hat{\mathbf{x}}_{k|k-1})}
+\end{equation}
+where $\mathbf{S}_k = \mathbf{H} \mathbf{P}_{k|k-1} \mathbf{H}^\top + \mathbf{R}$ is the innovation covariance. Measurements with $d_M > 3.0$ are rejected ($\sim$99.7\% confidence for 3~DOF). After 30 consecutive rejected or missing measurements ($\sim$1~s at 30~Hz), the filter resets and reinitializes on the next valid detection.
+
+\subsection{Depth Quality Monitoring}
+\label{sec:depth_quality}
+
+The perception node publishes real-time depth quality metrics: a binary availability flag on \texttt{/perception/depth\_available} and a per-frame quality ratio (valid depths / total detections) on \texttt{/perception/depth\_quality}. These enable downstream nodes to adapt behavior when depth is unreliable---for example, falling back to 2D-only tracking when depth quality drops below a configurable threshold.
 
 % ============================================================================
 \section{Physics-Informed Trajectory Prediction}
@@ -230,11 +327,74 @@ These results inform two key architectural decisions:
 % ============================================================================
 \section{Experimental Setup}
 \label{sec:experiments}
-% TODO: Flight Ops (primary), Middleware + QA
-% - Hardware platform description
-% - Flight test matrix
-% - SITL validation setup
-% - Data collection methodology
+
+Evaluation proceeds in two stages: software-in-the-loop (SITL) simulation for system integration validation, followed by hardware flight testing for real-world performance characterization.
+
+\subsection{SITL Validation}
+\label{sec:sitl}
+
+SITL testing uses PX4's Gazebo~\cite{gazebo2004} integration with a simulated X500 quadrotor. A mock detector generates synthetic detection sequences with configurable target motion patterns (circular, sinusoidal, figure-eight, and static), publish rate, bounding box size, and optional Gaussian noise. This enables end-to-end pipeline testing---from detection through Kalman filtering, prediction, and control---without requiring camera hardware.
+
+The SITL environment serves three purposes:
+\begin{enumerate}
+    \item \textbf{Integration testing}: Verifying that all ROS~2 nodes communicate correctly, PX4 enters and maintains offboard mode, and the control loop is stable.
+    \item \textbf{PINN training data}: Scripted target motion scenarios (10+, including vertical motion for altitude control validation) generate rosbag recordings of 3D position trajectories used to train the PINN (Section~\ref{sec:pinn}).
+    \item \textbf{Control tuning}: Initial PID parameter tuning for yaw, pitch, and altitude axes before transferring to hardware.
+\end{enumerate}
+
+% TODO: Add SITL results after completing integration tests
+
+\subsection{Hardware Flight Testing}
+\label{sec:flight_testing}
+
+Hardware flights are conducted in an indoor flight cage at Embry-Riddle Aeronautical University using a static or hand-held target. The flight test matrix evaluates both detectors under controlled scenarios:
+
+\begin{table}[htbp]
+    \centering
+    \caption{Flight test matrix. Each scenario is tested with both YOLOv8 and RF-DETR detectors.}
+    \label{tab:flight_matrix}
+    \begin{tabular}{lll}
+        \toprule
+        \textbf{Scenario} & \textbf{Motion Type} & \textbf{Primary Test} \\
+        \midrule
+        Steady hover     & Static target         & Baseline stability \\
+        Slow linear      & Horizontal, $<$1 m/s  & Yaw tracking \\
+        Moderate speed   & Horizontal, 1--2 m/s  & Yaw tracking \\
+        Vertical motion  & Up/down               & Pitch viewing \\
+        Approach/retreat & Toward/away            & Altitude control \\
+        Diagonal 3D      & Combined axes          & Full 3D control \\
+        Natural occlusion & Partial obstruction   & Dropout recovery \\
+        Varying distance  & 1--5 m range          & Depth accuracy \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{Data Collection}
+\label{sec:data_collection}
+
+Each flight records a ROS~2 rosbag containing:
+\begin{itemize}
+    \item \texttt{/detections}: Detection2DArray with embedded depth
+    \item \texttt{/camera/camera\_info}: Camera intrinsics
+    \item \texttt{/target\_yaw}: Computed yaw commands
+    \item \texttt{/fmu/in/trajectory\_setpoint}: Control commands sent to PX4
+    \item \texttt{/fmu/in/offboard\_control\_mode}: Offboard mode status
+    \item \texttt{/fmu/in/vehicle\_command}: Arming and mode commands
+\end{itemize}
+PX4 flight logs are downloaded separately for ground-truth attitude and position data. Environmental conditions (lighting, temperature) are logged per flight.
+
+\subsection{Evaluation Metrics}
+\label{sec:metrics}
+
+The following metrics are computed from flight data:
+\begin{itemize}
+    \item \textbf{Detection}: mAP@0.5, precision, recall, inference latency, and FPS for each detector.
+    \item \textbf{Tracking}: Detection dropout duration, recovery time (frames from dropout to re-acquisition), and 3D position estimation error relative to ground truth.
+    \item \textbf{Prediction}: PINN vs.\ Kalman extrapolation comparison using RMSE and maximum position error during dropout intervals.
+    \item \textbf{Control}: Yaw tracking error (degrees), altitude maintenance accuracy (meters), and response time to step changes in target position.
+\end{itemize}
+
+% TODO: Populate with actual flight data results
 
 % ============================================================================
 \section{Results}
