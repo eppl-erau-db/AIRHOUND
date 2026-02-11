@@ -27,6 +27,7 @@ setup(
     entry_points={
         "console_scripts": [
             "tracking_node = tracking_geometry.tracking_geometry:main",
+            "pinn_node = tracking_geometry.pinn_node:main",
         ],
     },
 )

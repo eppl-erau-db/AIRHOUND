@@ -35,6 +35,14 @@ data/sample.mp4
 data/degradation_preview/
 data/*.yaml
 data/README.*.txt
+data/pinn_training/
+
+# PINN model artifacts (trained locally, not committed)
+models/pinn/*.pth
+models/pinn/*.onnx
+models/pinn/*.engine
+models/pinn/norm_stats.npz
+models/pinn/config.txt
 
 # Rosbags - LFS tracks *.db3 and *.mcap files
 # Large training rosbag collections should use external storage
