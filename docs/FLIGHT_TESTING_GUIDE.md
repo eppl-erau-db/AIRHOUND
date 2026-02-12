@@ -182,7 +182,7 @@ ros2 bag record -a -o flight_test_001
 ros2 topic hz /detections
 
 # Monitor yaw commands
-ros2 topic echo /target_yaw
+ros2 topic echo /yaw_command
 
 # Check PX4 setpoints
 ros2 topic echo /fmu/in/trajectory_setpoint
@@ -352,7 +352,7 @@ detector_node:
 | `/camera/color/image_raw` | Image | 30Hz | RGB camera feed |
 | `/camera/depth/image_raw` | Image | 30Hz | Depth image (uint16) |
 | `/detections` | Detection2DArray | ~25Hz | Drone detections |
-| `/target_yaw` | Float32 | ~25Hz | Yaw rate command |
+| `/yaw_command` | Float64 | ~25Hz | Yaw rate command |
 | `/fmu/in/trajectory_setpoint` | TrajectorySetpoint | 10Hz | PX4 commands |
 
 ---

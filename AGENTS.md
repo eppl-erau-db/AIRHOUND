@@ -218,7 +218,7 @@ colcon test-result --verbose
 # In another terminal, check topics
 ros2 topic list
 ros2 topic echo /detections
-ros2 topic echo /target_yaw
+ros2 topic echo /yaw_command
 ```
 
 ## Contact

@@ -10,7 +10,7 @@ Demo Publisher → /yaw_command → PX4 Converter → MicroXRCE Agent → PX4 SI
 
 **Components:**
 - **demo_publisher_enhanced**: Publishes yaw commands (Float64) to `/yaw_command`
-- **px4_converter_node.py**: Converts yaw commands to PX4 offboard control messages
+- **px4_converter_gazebo**: Converts yaw commands (/yaw_command Float64) to PX4 offboard control messages
 - **MicroXRCE Agent**: Bridges ROS2 DDS with PX4's uXRCE-DDS client
 - **PX4 SITL**: PX4 autopilot running in Gazebo simulation
 
@@ -129,7 +129,7 @@ You should see:
 ```bash
 cd /home/lucca/PX4-Autopilot/airhound/DDS_to_PX4_middleware/workspace
 source install/setup.bash
-ros2 run offboard_control px4_converter_node.py
+ros2 run offboard_control px4_converter_gazebo
 ```
 
 You should see:
@@ -234,7 +234,7 @@ source install/setup.bash
 ### Drone doesn't respond
 1. Check MicroXRCE Agent is running (Terminal 2 should show connection messages)
 2. Verify PX4 shows "Commander: Ready for takeoff!"
-3. Ensure px4_converter_node is publishing messages (check Terminal 3)
+3. Ensure px4_converter_gazebo is publishing messages (check Terminal 3)
 4. Verify demo publisher is running (check Terminal 4)
 
 ### "Package not found" errors
@@ -265,7 +265,7 @@ airhound/
 │               ├── package.xml
 │               └── src/
 │                   ├── demo_publisher_enhanced.cpp        # Customizable yaw publisher
-│                   ├── px4_converter_node.py             # Yaw → PX4 converter
+│                   ├── px4_converter_gazebo.cpp           # Yaw → PX4 converter (sim)
 │                   └── dummy_yaw_publisher.cpp           # Simple test publisher
 └── PX4-Autopilot/                     # PX4 firmware (SITL)
 ```
@@ -281,7 +281,7 @@ colcon build --packages-select offboard_control
 source install/setup.bash
 ```
 
-Python scripts (`px4_converter_node.py`) don't need rebuilding.
+C++ nodes require rebuilding with `colcon build` after changes.
 
 ### Testing Without PX4
 

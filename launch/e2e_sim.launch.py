@@ -18,13 +18,13 @@ Usage:
   ros2 launch airhound e2e_sim.launch.py motion_type:=sinusoidal max_rate:=0.5
 
 Data Flow:
-  mock_detector -> /detections -> tracking_node -> /target_yaw -> px4_converter_node -> /fmu/in/* -> PX4
+  mock_detector -> /detections -> tracking_node -> /yaw_command -> px4_converter_gazebo -> /fmu/in/* -> PX4
 
 Topic Reference:
   Published:
     /detections             (vision_msgs/Detection2DArray) - Mock 2D detections
     /camera/camera_info     (sensor_msgs/CameraInfo)       - Simulated camera intrinsics
-    /target_yaw             (std_msgs/Float32)             - Yaw rate command
+    /yaw_command            (std_msgs/Float64)             - Yaw rate command
     /fmu/in/*               (px4_msgs/*)                   - PX4 offboard commands
 
   Note: In sim mode, no depth or /perception/target_3d is published.
@@ -165,7 +165,7 @@ def generate_launch_description():
     
     # Tracking Node
     # Subscribes: /detections, /camera/camera_info
-    # Publishes: /target_yaw (Float32)
+    # Publishes: /yaw_command (Float64)
     tracking_node = Node(
         package='tracking_geometry',
         executable='tracking_node',
@@ -177,13 +177,13 @@ def generate_launch_description():
         }]
     )
     
-    # PX4 Converter Node
-    # Subscribes: /target_yaw (Float32)
+    # PX4 Converter (Gazebo SITL)
+    # Subscribes: /yaw_command (Float64)
     # Publishes: /fmu/in/offboard_control_mode, /fmu/in/trajectory_setpoint, /fmu/in/vehicle_command
-    px4_converter_node = Node(
+    px4_converter_gazebo = Node(
         package='offboard_control',
-        executable='px4_converter_node',
-        name='px4_converter_node',
+        executable='px4_converter_gazebo',
+        name='px4_converter_gazebo',
         output='screen',
         parameters=[{
             'auto_arm': LaunchConfiguration('auto_arm'),
@@ -215,13 +215,13 @@ def generate_launch_description():
         
         # Info messages
         LogInfo(msg='=== AIRHOUND E2E Simulation Mode ==='),
-        LogInfo(msg='Starting: mock_detector -> tracking -> px4_converter'),
+        LogInfo(msg='Starting: mock_detector -> tracking -> px4_converter_gazebo'),
         LogInfo(msg='Make sure PX4 SITL + Gazebo and MicroXRCE Agent are running!'),
         
         # Launch nodes
         mock_detector_node,
         tracking_node,
-        px4_converter_node,
+        px4_converter_gazebo,
         
         LogInfo(msg='All nodes started. Watch Gazebo for drone movement!'),
     ])

@@ -128,7 +128,7 @@ A rosbag records all ROS2 topic data for later replay and analysis. To record du
 ros2 bag record -o sitl_test_001 \
     /detections \
     /camera/camera_info \
-    /target_yaw \
+    /yaw_command \
     /fmu/in/trajectory_setpoint \
     /fmu/in/offboard_control_mode \
     /fmu/in/vehicle_command
@@ -201,7 +201,7 @@ camera_source: "synthetic"
 │   RealSense     │     │   Perception    │     │    Tracking     │     │      PX4        │
 │   D455 Camera   │────▶│   (RF-DETR)     │────▶│  (Kalman + Yaw) │────▶│   Offboard      │
 └─────────────────┘     └─────────────────┘     └─────────────────┘     └─────────────────┘
-   RGB + Depth             /detections            /target_yaw           /fmu/in/*
+   RGB + Depth             /detections            /yaw_command          /fmu/in/*
                       /perception/target_3d
                       /perception/depth_quality
 ```
@@ -239,7 +239,7 @@ The RealSense D455 provides hardware-synchronized RGB and depth. Depth is:
 
 | Topic | Type | Description |
 |-------|------|-------------|
-| `/target_yaw` | `std_msgs/Float32` | Yaw rate command (rad/s) |
+| `/yaw_command` | `std_msgs/Float64` | Yaw rate command (rad/s) |
 
 ### PX4 Interface
 
@@ -454,7 +454,7 @@ ls ws_ros2/build/px4_msgs/rosidl_generator_cpp/px4_msgs/msg/ | wc -l
 2. Verify MicroXRCE Agent connection
 3. Check topics:
    ```bash
-   ros2 topic echo /target_yaw
+   ros2 topic echo /yaw_command
    ros2 topic echo /fmu/in/trajectory_setpoint
    ```
 
@@ -492,7 +492,7 @@ ros2 run airhound_perception detector_node
 ros2 run tracking_geometry tracking_node
 
 # Terminal 3: PX4 interface
-ros2 run offboard_control px4_converter_node
+ros2 run offboard_control px4_converter_gazebo
 
 # Terminal 4: Monitor
 ros2 topic echo /perception/target_3d

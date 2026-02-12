@@ -28,10 +28,10 @@ Data Flow (camera_source="realsense"):
     ├── Depth ────────────► detector_node ──► /perception/target_3d (3D pos)  │
     └── CameraInfo ───────► detector_node                                      │
                                                                                 ▼
-                                              tracking_node ──► /target_yaw ──► px4_converter_node ──► PX4
+                                              tracking_node ──► /yaw_command ──► px4_converter_gazebo ──► PX4
 
 Data Flow (camera_source="synthetic"):
-  mock_detector ──► /detections ──► tracking_node ──► /target_yaw ──► px4_converter_node ──► PX4
+  mock_detector ──► /detections ──► tracking_node ──► /yaw_command ──► px4_converter_gazebo ──► PX4
 
 Topic Reference:
   Published by detector_node (or mock_detector):
@@ -41,9 +41,9 @@ Topic Reference:
     /perception/fps         (std_msgs/Float32)             - Current FPS
 
   Published by tracking_node:
-    /target_yaw             (std_msgs/Float32)             - Yaw rate command (rad/s)
+    /yaw_command            (std_msgs/Float64)             - Yaw rate command (rad/s)
 
-  Published by px4_converter_node:
+  Published by px4_converter_gazebo:
     /fmu/in/*               (px4_msgs/*)                   - PX4 offboard commands
 
   See docs/PERCEPTION_INTERFACE.md for detailed message formats.
@@ -312,7 +312,7 @@ def generate_launch_description():
     
     # Tracking Node (always runs)
     # Subscribes: /detections, /camera/camera_info
-    # Publishes: /target_yaw (Float32)
+    # Publishes: /yaw_command (Float64)
     tracking_node = Node(
         package='tracking_geometry',
         executable='tracking_node',
@@ -324,13 +324,13 @@ def generate_launch_description():
         }]
     )
     
-    # PX4 Converter Node (always runs)
-    # Subscribes: /target_yaw (Float32)
+    # PX4 Converter (Gazebo SITL / Flight)
+    # Subscribes: /yaw_command (Float64)
     # Publishes: /fmu/in/offboard_control_mode, /fmu/in/trajectory_setpoint, /fmu/in/vehicle_command
-    px4_converter_node = Node(
+    px4_converter_gazebo = Node(
         package='offboard_control',
-        executable='px4_converter_node',
-        name='px4_converter_node',
+        executable='px4_converter_gazebo',
+        name='px4_converter_gazebo',
         output='screen',
         parameters=[{
             'auto_arm': LaunchConfiguration('auto_arm'),
@@ -379,7 +379,7 @@ def generate_launch_description():
         detector_node,
         mock_detector_node,
         tracking_node,
-        px4_converter_node,
+        px4_converter_gazebo,
         
         LogInfo(msg='All nodes started. Monitor detections and yaw commands.'),
     ])

@@ -119,11 +119,11 @@ def generate_launch_description():
         }]
     )
     
-    # 4. PX4 Converter Node
+    # 4. PX4 Converter (subscribes /yaw_command Float64)
     px4_converter = Node(
         package='offboard_control',
-        executable='px4_converter_node',
-        name='px4_converter_node',
+        executable='px4_converter_gazebo',
+        name='px4_converter_gazebo',
         output='screen',
         parameters=[{
             'auto_arm': LaunchConfiguration('auto_arm'),
