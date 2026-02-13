@@ -20,6 +20,17 @@
 
 set -e
 
+# =============================================================================
+# PATH sanitization
+# =============================================================================
+# Linuxbrew ships Python 3.14+ and protobuf versions that conflict with
+# ROS2 (needs system Python 3.12) and PX4 builds. Strip it from PATH so
+# system toolchain is used consistently.
+if echo "$PATH" | grep -q "linuxbrew"; then
+    PATH=$(echo "$PATH" | tr ':' '\n' | grep -v linuxbrew | tr '\n' ':' | sed 's/:$//')
+    export PATH
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -89,12 +100,13 @@ print_help() {
 cleanup() {
     echo -e "\n${YELLOW}Cleaning up...${NC}"
     
-    # Kill ROS2 launch
+    # Kill ROS2 launch and its child nodes
     if [ -n "$ROS_PID" ] && kill -0 "$ROS_PID" 2>/dev/null; then
         echo "Stopping ROS2 nodes..."
         kill -SIGINT "$ROS_PID" 2>/dev/null || true
         wait "$ROS_PID" 2>/dev/null || true
     fi
+    pkill -f "mock_detector\|tracking_node\|px4_converter" 2>/dev/null || true
     
     # Kill MicroXRCE Agent
     if [ -n "$AGENT_PID" ] && kill -0 "$AGENT_PID" 2>/dev/null; then
@@ -103,25 +115,23 @@ cleanup() {
         wait "$AGENT_PID" 2>/dev/null || true
     fi
     
-    # Kill PX4 SITL
+    # Kill PX4 SITL and all its child processes (make -> ninja -> px4 -> gz sim)
     if [ -n "$PX4_PID" ] && kill -0 "$PX4_PID" 2>/dev/null; then
         echo "Stopping PX4 SITL..."
         kill -SIGINT "$PX4_PID" 2>/dev/null || true
         wait "$PX4_PID" 2>/dev/null || true
     fi
+    pkill -f "bin/px4" 2>/dev/null || true
+    pkill -f "gz sim" 2>/dev/null || true
+    
+    # Remove PX4 lock files so next launch starts clean
+    rm -f /tmp/px4_lock-* /tmp/px4-sock-* 2>/dev/null
     
     echo -e "${GREEN}Cleanup complete.${NC}"
 }
 
 check_ros2() {
-    if ! command -v ros2 &> /dev/null; then
-        echo -e "${RED}ERROR: ROS2 not found!${NC}"
-        echo "Please install ROS2 Humble or Jazzy first."
-        echo "See: https://docs.ros.org/en/humble/Installation.html"
-        exit 1
-    fi
-    
-    # Check which distro is available
+    # Check which distro is available and source it
     if [ -f "/opt/ros/humble/setup.bash" ]; then
         ROS_DISTRO="humble"
         ROS_SETUP="/opt/ros/humble/setup.bash"
@@ -130,6 +140,16 @@ check_ros2() {
         ROS_SETUP="/opt/ros/jazzy/setup.bash"
     else
         echo -e "${RED}ERROR: No ROS2 installation found in /opt/ros/${NC}"
+        echo "Please install ROS2 Humble or Jazzy first."
+        echo "See: https://docs.ros.org/en/humble/Installation.html"
+        exit 1
+    fi
+
+    # Source ROS2 so ros2 CLI is available for the rest of the script
+    source "$ROS_SETUP"
+
+    if ! command -v ros2 &> /dev/null; then
+        echo -e "${RED}ERROR: ROS2 sourced but ros2 command not found!${NC}"
         exit 1
     fi
     
@@ -195,6 +215,50 @@ install_px4() {
     echo -e "${GREEN}PX4-Autopilot installed successfully!${NC}"
 }
 
+configure_px4_sitl() {
+    # PX4 SITL defaults reject offboard arming because there is no RC
+    # transmitter or GCS heartbeat. Patch the x500 airframe to allow
+    # offboard operation without RC and suppress datalink-loss failsafes.
+    # This only touches the local build and is idempotent.
+    
+    PX4_PATH_EXPANDED="${PX4_PATH/#\~/$HOME}"
+    local AIRFRAME="${PX4_PATH_EXPANDED}/ROMFS/px4fmu_common/init.d-posix/airframes/4001_gz_x500"
+    
+    if [ ! -f "$AIRFRAME" ]; then
+        echo -e "${YELLOW}WARNING: PX4 airframe file not found, skipping SITL param config${NC}"
+        return
+    fi
+    
+    local NEEDS_PATCH=false
+    
+    # Check if our params are already present
+    grep -q "COM_RCL_EXCEPT" "$AIRFRAME" || NEEDS_PATCH=true
+    
+    if [ "$NEEDS_PATCH" = true ]; then
+        echo -e "${BLUE}Configuring PX4 SITL parameters for offboard operation...${NC}"
+        
+        # Append offboard-friendly params (idempotent; only added if missing)
+        cat >> "$AIRFRAME" << 'EOF'
+
+# --- AIRHOUND offboard SITL params ---
+# Allow offboard mode without RC transmitter
+param set-default COM_RCL_EXCEPT 4
+# Disable RC loss and datalink loss failsafe actions for SITL
+param set-default NAV_RCL_ACT 0
+param set-default NAV_DLL_ACT 0
+EOF
+        
+        echo -e "${GREEN}PX4 SITL configured for offboard arming${NC}"
+        
+        # Clear cached parameters so new defaults take effect on next boot
+        rm -rf "${PX4_PATH_EXPANDED}/build/px4_sitl_default/rootfs/eeprom" 2>/dev/null
+        rm -f "${PX4_PATH_EXPANDED}/build/px4_sitl_default/rootfs/parameters.bson" 2>/dev/null
+        rm -f "${PX4_PATH_EXPANDED}/build/px4_sitl_default/rootfs/parameters_backup.bson" 2>/dev/null
+    else
+        echo -e "${GREEN}PX4 SITL already configured for offboard${NC}"
+    fi
+}
+
 source_workspace() {
     echo -e "${BLUE}Sourcing ROS2 environment...${NC}"
     
@@ -240,10 +304,29 @@ build_workspace() {
     echo -e "${GREEN}Workspace built successfully!${NC}"
 }
 
+clean_px4_locks() {
+    # PX4 SITL uses lock files that persist after unclean shutdowns,
+    # preventing the next launch. Clean them proactively.
+    if [ -f "/tmp/px4_lock-0" ]; then
+        echo -e "${YELLOW}Cleaning stale PX4 lock files...${NC}"
+        pkill -9 -f "bin/px4" 2>/dev/null || true
+        pkill -9 -f "gz sim" 2>/dev/null || true
+        sleep 1
+        rm -f /tmp/px4_lock-* /tmp/px4-sock-* 2>/dev/null
+    fi
+}
+
 start_px4_sitl() {
     echo -e "${BLUE}Starting PX4 SITL + Gazebo...${NC}"
     
     PX4_PATH_EXPANDED="${PX4_PATH/#\~/$HOME}"
+    
+    # Clean stale locks from previous runs
+    clean_px4_locks
+    
+    # Configure PX4 parameters for offboard SITL (idempotent)
+    configure_px4_sitl
+    
     cd "$PX4_PATH_EXPANDED"
     
     # Start PX4 SITL in background

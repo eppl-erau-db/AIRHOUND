@@ -2,7 +2,7 @@
 #include <px4_msgs/msg/offboard_control_mode.hpp>
 #include <px4_msgs/msg/trajectory_setpoint.hpp>
 #include <px4_msgs/msg/vehicle_command.hpp>
-#include <px4_msgs/msg/vehicle_status.hpp>
+#include <px4_msgs/msg/vehicle_control_mode.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <std_msgs/msg/string.hpp>
 
@@ -43,10 +43,10 @@ public:
             "/yaw_command", 10, 
             std::bind(&PX4ConverterGazebo::yaw_command_callback, this, std::placeholders::_1));
         
-        // Subscriber for PX4 vehicle status (feedback)
-        vehicle_status_sub_ = this->create_subscription<px4_msgs::msg::VehicleStatus>(
-            "/fmu/out/vehicle_status", qos,
-            std::bind(&PX4ConverterGazebo::vehicle_status_callback, this, std::placeholders::_1));
+        // Subscriber for PX4 vehicle control mode (feedback - more reliable than vehicle_status)
+        vehicle_control_mode_sub_ = this->create_subscription<px4_msgs::msg::VehicleControlMode>(
+            "/fmu/out/vehicle_control_mode", qos,
+            std::bind(&PX4ConverterGazebo::vehicle_control_mode_callback, this, std::placeholders::_1));
         
         // Main control timer
         auto timer_period = std::chrono::milliseconds(static_cast<int>(1000.0 / publish_rate));
@@ -86,17 +86,16 @@ private:
         has_received_command_ = true;
     }
     
-    void vehicle_status_callback(const px4_msgs::msg::VehicleStatus::SharedPtr msg) {
-        vehicle_armed_ = (msg->arming_state == px4_msgs::msg::VehicleStatus::ARMING_STATE_ARMED);
-        offboard_mode_ = (msg->nav_state == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD);
+    void vehicle_control_mode_callback(const px4_msgs::msg::VehicleControlMode::SharedPtr msg) {
+        vehicle_armed_ = msg->flag_armed;
+        offboard_mode_ = msg->flag_control_offboard_enabled;
         
         static int status_log_counter = 0;
-        if (++status_log_counter % 50 == 0) { // Log every 5 seconds at 10Hz
+        if (++status_log_counter % 50 == 0) { // Log every ~1 second
             RCLCPP_INFO(this->get_logger(), 
-                "📡 Vehicle Status: Armed=%s, Offboard=%s, Nav_state=%d",
+                "📡 Vehicle Mode: Armed=%s, Offboard=%s",
                 vehicle_armed_ ? "YES" : "NO", 
-                offboard_mode_ ? "YES" : "NO",
-                msg->nav_state);
+                offboard_mode_ ? "YES" : "NO");
         }
     }
     
@@ -111,11 +110,17 @@ private:
         }
         
         // Handle arming sequence: PX4 requires setpoint streaming -> offboard -> arm
+        // Send commands periodically until armed (handles DDS latency and PX4 readiness)
         if (auto_arm_ && has_received_command_) {
-            if (control_counter_ == 20) {
-                send_offboard_command(timestamp);  // Switch to offboard after ~2s of setpoints
-            } else if (control_counter_ == 30) {
-                send_arm_command(timestamp);        // Arm after offboard mode is active
+            if (!vehicle_armed_ && control_counter_ > 10 && control_counter_ % 10 == 0) {
+                // Send offboard mode command first
+                send_offboard_command(timestamp);
+                // Then send arm command (PX4 needs offboard active to accept arm in offboard)
+                send_arm_command(timestamp);
+                RCLCPP_INFO(this->get_logger(), 
+                    "🔄 Arming attempt (counter=%d, armed=%s, offboard=%s)",
+                    control_counter_, vehicle_armed_ ? "YES" : "NO", 
+                    offboard_mode_ ? "YES" : "NO");
             }
         }
         
@@ -161,9 +166,10 @@ private:
         msg.velocity = {0.0f, 0.0f, 0.0f};
         msg.acceleration = {0.0f, 0.0f, 0.0f};
         
-        // Apply converted yaw command
+        // Apply yaw command directly as absolute angle
+        // tracking_node outputs angular error which oscillates ±, producing side-to-side yaw
         msg.yaw = target_yaw_;
-        msg.yawspeed = 0.0f; // Let PX4 handle yaw rate
+        msg.yawspeed = 0.0f;
         msg.timestamp = timestamp;
         
         trajectory_setpoint_pub_->publish(msg);
@@ -178,6 +184,7 @@ private:
         px4_msgs::msg::VehicleCommand msg;
         msg.command = px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM;
         msg.param1 = 1.0f; // 1 to arm, 0 to disarm
+        msg.param2 = 0.0f; // Standard arm (PX4 params handle SITL failsafe exceptions)
         msg.target_system = 1;
         msg.target_component = 1;
         msg.source_system = 1;
@@ -227,7 +234,7 @@ private:
     
     // Subscribers
     rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr yaw_command_sub_;
-    rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr vehicle_status_sub_;
+    rclcpp::Subscription<px4_msgs::msg::VehicleControlMode>::SharedPtr vehicle_control_mode_sub_;
     
     // Timers
     rclcpp::TimerBase::SharedPtr control_timer_;
