@@ -21,6 +21,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
 
 from std_msgs.msg import Float32
+from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import CameraInfo
 from vision_msgs.msg import (
     Detection2DArray,
@@ -75,6 +76,10 @@ class MockDetectorNode(Node):
         self.declare_parameter("add_noise", True)
         self.declare_parameter("noise_std", 3.0)  # pixels
 
+        # Simulated occlusion: periodic forced dropout for PINN testing
+        self.declare_parameter("dropout_interval", 0.0)   # seconds between dropout starts (0=disabled)
+        self.declare_parameter("dropout_duration", 0.0)    # seconds of forced dropout
+
         # Camera intrinsics (D435i-like for 1280x720)
         self.declare_parameter("fx", 615.0)
         self.declare_parameter("fy", 615.0)
@@ -102,6 +107,8 @@ class MockDetectorNode(Node):
         self.num_targets = self.get_parameter("num_targets").value
         self.add_noise = self.get_parameter("add_noise").value
         self.noise_std = self.get_parameter("noise_std").value
+        self.dropout_interval = self.get_parameter("dropout_interval").value
+        self.dropout_duration = self.get_parameter("dropout_duration").value
 
         self.fx = self.get_parameter("fx").value
         self.fy = self.get_parameter("fy").value
@@ -127,6 +134,7 @@ class MockDetectorNode(Node):
         # === Publishers ===
         qos_default = QoSProfile(depth=10)
         self.det_pub = self.create_publisher(Detection2DArray, det_topic, qos_default)
+        self.target_3d_pub = self.create_publisher(PointStamped, "/perception/target_3d", qos_default)
         self.fps_pub = self.create_publisher(Float32, "/perception/fps", qos_default)
         self.camera_info_pub = self.create_publisher(
             CameraInfo, "/camera/camera_info", qos_default
@@ -328,21 +336,44 @@ class MockDetectorNode(Node):
         det_array.header.stamp = now.to_msg()
         det_array.header.frame_id = self.frame_id
 
+        # Check for simulated forced dropout
+        forced_dropout = False
+        if self.dropout_interval > 0 and self.dropout_duration > 0:
+            elapsed = time.time() - self.start_time
+            cycle_pos = elapsed % self.dropout_interval
+            forced_dropout = cycle_pos < self.dropout_duration
+
         visible_count = 0
         for i in range(self.num_targets):
             target_ned = self._target_world_position(i)
             u, v, in_fov = self._project_to_pixel(target_ned)
 
-            if in_fov:
+            if in_fov and not forced_dropout:
                 dn, de, dd = self.drone_pos
-                dist = math.sqrt(
-                    (target_ned[0] - dn) ** 2
-                    + (target_ned[1] - de) ** 2
-                    + (target_ned[2] - dd) ** 2
-                )
+                dx = target_ned[0] - dn
+                dy = target_ned[1] - de
+                dz = target_ned[2] - dd
+                dist = math.sqrt(dx * dx + dy * dy + dz * dz)
                 det = self._create_detection(u, v, dist)
                 det_array.detections.append(det)
                 visible_count += 1
+
+                # Publish 3D position in camera optical frame
+                # NED->body: rotate by -yaw; body->optical: X_opt=Y_body, Y_opt=Z_body, Z_opt=X_body
+                cos_y = math.cos(self.drone_yaw)
+                sin_y = math.sin(self.drone_yaw)
+                # NED to body (forward, right, down)
+                bx = cos_y * dx + sin_y * dy   # forward
+                by = -sin_y * dx + cos_y * dy  # right
+                # bz = dz (down)
+                # Body to camera optical: X=right, Y=down, Z=forward
+                pt = PointStamped()
+                pt.header.stamp = det_array.header.stamp
+                pt.header.frame_id = self.frame_id
+                pt.point.x = float(by)   # right
+                pt.point.y = float(dz)   # down
+                pt.point.z = float(bx)   # forward
+                self.target_3d_pub.publish(pt)
 
         self.det_pub.publish(det_array)
         self.fps_pub.publish(Float32(data=float(self.publish_rate_hz)))

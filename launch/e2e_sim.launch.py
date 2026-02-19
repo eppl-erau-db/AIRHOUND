@@ -60,6 +60,14 @@ def generate_launch_description():
     add_noise_arg = DeclareLaunchArgument(
         'add_noise', default_value='false')
 
+    # Simulated dropout for PINN testing
+    dropout_interval_arg = DeclareLaunchArgument(
+        'dropout_interval', default_value='0.0',
+        description='Seconds between forced dropouts (0=disabled)')
+    dropout_duration_arg = DeclareLaunchArgument(
+        'dropout_duration', default_value='0.0',
+        description='Seconds of forced dropout per interval')
+
     # Tracking
     max_rate_arg = DeclareLaunchArgument(
         'max_rate', default_value='1.0')
@@ -76,7 +84,7 @@ def generate_launch_description():
         'enable_pinn', default_value='false',
         description='Enable PINN trajectory prediction during dropout')
     pinn_model_arg = DeclareLaunchArgument(
-        'pinn_model_path', default_value='models/pinn/pinn_best.pth')
+        'pinn_model_path', default_value='models/pinn/pinn_best.onnx')
     pinn_norm_arg = DeclareLaunchArgument(
         'pinn_norm_stats_path', default_value='models/pinn/norm_stats.npz')
 
@@ -120,6 +128,8 @@ def generate_launch_description():
             'num_targets': 1,
             'add_noise': LaunchConfiguration('add_noise'),
             'noise_std': 5.0,
+            'dropout_interval': LaunchConfiguration('dropout_interval'),
+            'dropout_duration': LaunchConfiguration('dropout_duration'),
         }]
     )
 
@@ -154,7 +164,7 @@ def generate_launch_description():
             'prediction_horizon': 0.1,
             'dropout_timeout': 0.1,
             'max_prediction_time': 2.0,
-            'use_onnx': False,
+            'use_onnx': True,
             'publish_rate_hz': 30.0,
         }]
     )
@@ -235,6 +245,8 @@ def generate_launch_description():
         image_width_arg,
         image_height_arg,
         add_noise_arg,
+        dropout_interval_arg,
+        dropout_duration_arg,
         max_rate_arg,
         deadband_arg,
         enable_kalman_arg,

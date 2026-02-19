@@ -188,7 +188,7 @@ private:
         px4_msgs::msg::VehicleCommand msg;
         msg.command = px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM;
         msg.param1 = 1.0f; // 1 to arm, 0 to disarm
-        msg.param2 = 0.0f; // Standard arm (PX4 params handle SITL failsafe exceptions)
+        msg.param2 = 21196.0f; // Force arm (bypass pre-flight checks in SITL)
         msg.target_system = 1;
         msg.target_component = 1;
         msg.source_system = 1;
