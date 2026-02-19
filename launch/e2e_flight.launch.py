@@ -182,6 +182,23 @@ def generate_launch_description():
         default_value='0.01',
         description='Deadband threshold to avoid jitter (rad)'
     )
+
+    # Kalman / PINN
+    enable_kalman_arg = DeclareLaunchArgument(
+        'enable_kalman', default_value='true',
+        description='Enable Kalman filter for dropout extrapolation')
+
+    enable_pinn_arg = DeclareLaunchArgument(
+        'enable_pinn', default_value='true',
+        description='Enable PINN trajectory prediction during dropout')
+
+    pinn_model_arg = DeclareLaunchArgument(
+        'pinn_model_path', default_value='models/pinn/pinn_best_ir8.onnx',
+        description='Path to PINN ONNX model')
+
+    pinn_norm_stats_arg = DeclareLaunchArgument(
+        'pinn_norm_stats_path', default_value='models/pinn/norm_stats.npz',
+        description='Path to PINN normalization stats')
     
     # PX4 converter arguments
     auto_arm_arg = DeclareLaunchArgument(
@@ -335,6 +352,29 @@ def generate_launch_description():
         parameters=[{
             'max_rate': LaunchConfiguration('max_rate'),
             'deadband': LaunchConfiguration('deadband'),
+            'enable_kalman': LaunchConfiguration('enable_kalman'),
+            'kalman_gate_threshold': 3.0,
+            'kalman_max_missed': 30,
+            'enable_pinn': LaunchConfiguration('enable_pinn'),
+            'pinn_dropout_timeout': 0.1,
+        }]
+    )
+
+    # PINN Prediction Node (optional)
+    pinn_node = Node(
+        package='tracking_geometry',
+        executable='pinn_node',
+        name='pinn_prediction_node',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('enable_pinn')),
+        parameters=[{
+            'model_path': LaunchConfiguration('pinn_model_path'),
+            'norm_stats_path': LaunchConfiguration('pinn_norm_stats_path'),
+            'prediction_horizon': 0.1,
+            'dropout_timeout': 0.1,
+            'max_prediction_time': 2.0,
+            'use_onnx': True,
+            'publish_rate_hz': 30.0,
         }]
     )
     
@@ -456,6 +496,10 @@ def generate_launch_description():
         add_noise_arg,
         max_rate_arg,
         deadband_arg,
+        enable_kalman_arg,
+        enable_pinn_arg,
+        pinn_model_arg,
+        pinn_norm_stats_arg,
         auto_arm_arg,
         px4_publish_rate_arg,
         safety_timeout_arg,
@@ -475,6 +519,7 @@ def generate_launch_description():
         detector_node,
         mock_detector_node,
         tracking_node,
+        pinn_node,
         px4_converter_gazebo,
         
         # Data recording

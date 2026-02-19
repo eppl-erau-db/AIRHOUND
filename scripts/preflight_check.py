@@ -92,7 +92,9 @@ def main():
 
     # ---- Model Weights ----
     print("\n[Model Weights]")
-    model_dir = Path(os.path.expanduser("~/dev/research/EPPL/code/AIRHOUND/models"))
+    # Resolve relative to script location (works on both laptop and Jetson)
+    script_dir = Path(__file__).resolve().parent.parent
+    model_dir = script_dir / "models"
 
     # Check for any TensorRT engine
     engines = list(model_dir.glob("*.engine")) + list(model_dir.glob("**/*.engine"))
@@ -101,9 +103,12 @@ def main():
                  ", ".join(e.name for e in engines[:3]) if engines else "none"):
         failures += 1
 
-    # PINN weights
-    pinn_path = model_dir / "pinn" / "pinn_best.pth"
-    if not check("PINN weights exist", pinn_path.exists(), str(pinn_path)):
+    # PINN weights (ONNX preferred for Jetson, PyTorch as fallback)
+    pinn_onnx = model_dir / "pinn" / "pinn_best_ir8.onnx"
+    pinn_pth = model_dir / "pinn" / "pinn_best.pth"
+    pinn_ok = pinn_onnx.exists() or pinn_pth.exists()
+    pinn_found = str(pinn_onnx if pinn_onnx.exists() else pinn_pth)
+    if not check("PINN weights exist", pinn_ok, pinn_found):
         failures += 1
 
     pinn_norm = model_dir / "pinn" / "norm_stats.npz"
@@ -126,8 +131,7 @@ def main():
 
     # ---- Workspace Build ----
     print("\n[Workspace]")
-    ws_install = Path(os.path.expanduser(
-        "~/dev/research/EPPL/code/AIRHOUND/ws_ros2/install"))
+    ws_install = script_dir / "ws_ros2" / "install"
     packages = ['airhound_perception', 'tracking_geometry', 'offboard_control']
     for pkg in packages:
         pkg_path = ws_install / pkg
