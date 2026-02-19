@@ -18,10 +18,12 @@ public:
         this->declare_parameter("auto_arm", true);
         this->declare_parameter("publish_rate", 10.0);
         this->declare_parameter("safety_timeout", 5.0);
+        this->declare_parameter("force_arm", false);
         
         auto_arm_ = this->get_parameter("auto_arm").as_bool();
         double publish_rate = this->get_parameter("publish_rate").as_double();
         safety_timeout_ = this->get_parameter("safety_timeout").as_double();
+        force_arm_ = this->get_parameter("force_arm").as_bool();
         
         // Setup QoS profile for PX4 compatibility
         rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
@@ -188,7 +190,7 @@ private:
         px4_msgs::msg::VehicleCommand msg;
         msg.command = px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM;
         msg.param1 = 1.0f; // 1 to arm, 0 to disarm
-        msg.param2 = 21196.0f; // Force arm (bypass pre-flight checks in SITL)
+        msg.param2 = force_arm_ ? 21196.0f : 0.0f; // 21196 bypasses pre-flight checks (SITL/HITL only)
         msg.target_system = 1;
         msg.target_component = 1;
         msg.source_system = 1;
@@ -247,6 +249,7 @@ private:
     // State variables
     float target_yaw_ = 0.0f;
     bool auto_arm_ = true;
+    bool force_arm_ = false;
     double safety_timeout_ = 5.0;
     bool has_received_command_ = false;
     bool vehicle_armed_ = false;

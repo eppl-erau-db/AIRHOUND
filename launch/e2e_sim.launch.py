@@ -178,6 +178,7 @@ def generate_launch_description():
             'auto_arm': LaunchConfiguration('auto_arm'),
             'publish_rate': LaunchConfiguration('px4_publish_rate'),
             'safety_timeout': LaunchConfiguration('safety_timeout'),
+            'force_arm': True,  # SITL needs force-arm to bypass pre-flight checks
         }]
     )
 
