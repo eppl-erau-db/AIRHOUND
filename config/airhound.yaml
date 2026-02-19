@@ -125,14 +125,35 @@ camera:
 # -----------------------------------------------------------------------------
 # Tracking Settings
 # -----------------------------------------------------------------------------
-# Converts detections to yaw commands
+# Converts detections to yaw commands with optional Kalman + PINN
 tracking:
   # Yaw rate limits
   max_rate: 1.0              # Maximum yaw rate command (rad/s)
   deadband: 0.01             # Below this threshold, no command sent (rad)
-  
+
   # Target selection (when multiple detections)
   # Currently uses highest confidence detection
+
+  # 3D Kalman filter (smooths depth-fused positions, enables extrapolation)
+  kalman:
+    enable: true             # Set false to disable Kalman entirely
+    process_noise_pos: 0.1   # Position process noise
+    process_noise_vel: 1.0   # Velocity process noise
+    measurement_noise: 0.05  # Measurement noise (depth accuracy)
+    gate_threshold: 3.0      # Mahalanobis gating threshold (chi2 3DOF 99.7%)
+    max_missed: 30           # Consecutive misses before filter reset (~1s at 30Hz)
+
+  # PINN trajectory prediction (optional, requires trained model)
+  # When enabled, the pinn_node runs alongside the tracking node.
+  # During detection dropout, PINN predictions replace Kalman extrapolation.
+  pinn:
+    enable: false            # Set true to activate PINN dropout prediction
+    model_path: "models/pinn/pinn_best.pth"
+    norm_stats_path: "models/pinn/norm_stats.npz"
+    prediction_horizon: 0.1  # How far ahead to predict (seconds)
+    dropout_timeout: 0.1     # Seconds without detection before PINN activates
+    max_prediction_time: 2.0 # Max duration to predict without new detection
+    use_onnx: false          # Use ONNX Runtime instead of PyTorch
 
 # -----------------------------------------------------------------------------
 # PX4 Offboard Control Settings

@@ -329,6 +329,11 @@ start_px4_sitl() {
     
     cd "$PX4_PATH_EXPANDED"
     
+    # Use baylands world for visual reference (sky, terrain, buildings)
+    # Default world is a white plane which makes it hard to see the drone
+    export PX4_GZ_WORLD=${PX4_GZ_WORLD:-baylands}
+    echo -e "${BLUE}Using Gazebo world: ${PX4_GZ_WORLD}${NC}"
+    
     # Start PX4 SITL in background
     make px4_sitl "$GAZEBO_TARGET" &
     PX4_PID=$!

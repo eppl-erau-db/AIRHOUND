@@ -66,25 +66,56 @@
 
 % ============================================================================
 \begin{abstract}
-% TODO: Write after all sections are drafted (Lead owns this)
+Autonomous UAV target pursuit requires robust detection, state estimation, and control under conditions where visual input degrades or disappears entirely. We present AIRHOUND, an onboard perception-to-control pipeline for single-target drone tracking that runs entirely on an NVIDIA Jetson Orin. The system integrates two detection architectures---RF-DETR (transformer-based) and YOLOv8n (CNN-based)---with Intel RealSense D455 stereo depth for 3D state estimation, a 6-state Kalman filter for temporal smoothing, and a physics-informed neural network (PINN) for trajectory prediction during detection dropout. We evaluate both detectors under four synthetic degradation types (Gaussian noise, low light, motion blur, partial occlusion) at five severity levels. RF-DETR retains 75\% of its clean-baseline mAP at maximum noise severity, compared to 33\% for YOLOv8n, a +39.8 percentage point advantage attributable to the transformer attention mechanism's ability to aggregate global context from uncorrupted image regions. Both architectures run above 25~FPS on the Jetson Orin after TensorRT FP16 conversion. The PINN enforces a velocity magnitude constraint ($\|\mathbf{v}\| \leq 10$~m/s) during training, preventing physically implausible extrapolation during multi-second dropouts. The complete pipeline is validated in PX4 software-in-the-loop simulation with closed-loop yaw tracking, and hardware flight testing with real-time detection is in progress. All perception and tracking components are modular, configurable at runtime via a single YAML file, and communicate over standard ROS~2 interfaces.
 \end{abstract}
 
 % ============================================================================
 \section{Introduction}
 \label{sec:intro}
-% TODO: Lead + Tracking team (PINN lit review)
-% - Motivation: autonomous UAV pursuit in degraded visual conditions
-% - Gap: CNN detectors degrade under noise/blur, reactive control fails during dropouts
-% - Contribution summary (5 novel elements from roadmap)
+
+Autonomous UAV pursuit of airborne targets is constrained by two problems that compound each other: detection accuracy degrades under adverse visual conditions, and reactive control pipelines have no mechanism to maintain tracking when detections disappear. A target drone crossing through shadow, backlight, or turbulence-induced motion blur can cause a CNN-based detector to lose track for hundreds of milliseconds; during that interval, a purely reactive controller has no input and the pursuit vehicle drifts off target. Recovery requires re-acquisition, which may fail if the target has moved outside the camera's field of view.
+
+Prior work on UAV visual tracking has largely addressed these problems independently. Object detection benchmarks evaluate accuracy under clean conditions or with limited augmentation~\cite{ultralytics2023,carion2020detr}. Kalman filtering provides short-term state extrapolation but assumes constant velocity, producing increasing error during maneuvering targets~\cite{kalmanfilter1960}. Physics-informed neural networks have been applied to fluid dynamics and structural mechanics~\cite{raissi2019pinn} but have seen limited adoption in real-time aerial tracking, where inference latency and onboard compute are hard constraints.
+
+This paper presents AIRHOUND, an integrated perception-to-control pipeline for autonomous UAV target pursuit that addresses both problems within a single onboard system. The contributions are:
+
+\begin{enumerate}
+    \item A comparative evaluation of RF-DETR~\cite{rfdetr2025} and YOLOv8n~\cite{ultralytics2023} under four synthetic degradation types at five severity levels, demonstrating that the transformer architecture retains 75\% of clean-baseline mAP at maximum noise severity compared to 33\% for the CNN baseline.
+    \item Depth-fused 3D state estimation using Intel RealSense D455 stereo depth with a 6-state Kalman filter, providing position and velocity estimates in the camera optical frame.
+    \item A physics-informed neural network for trajectory prediction during detection dropout, trained with a velocity-bounded physics loss that prevents implausible extrapolation.
+    \item A modular ROS~2 pipeline where all components (detector selection, Kalman filter, PINN, control parameters) are configurable at runtime via a single YAML file, enabling systematic ablation without code changes.
+    \item End-to-end validation in PX4 software-in-the-loop simulation with closed-loop yaw tracking, with hardware flight testing on NVIDIA Jetson Orin in progress.
+\end{enumerate}
+
+The system runs entirely onboard, with both detectors exceeding 25~FPS after TensorRT conversion on the Jetson Orin (16~GB). The pipeline is designed for the SPIE DS112 track theme of machine learning from challenging data: the degradation evaluation directly characterizes how detection architecture choice affects tracking reliability when visual input quality cannot be guaranteed.
 
 % ============================================================================
 \section{Related Work}
 \label{sec:related}
-% TODO: Lead + Tracking team
-% - Object detection on embedded platforms (YOLO family, DETR family)
-% - Visual tracking and state estimation (Kalman, depth fusion)
-% - Physics-informed neural networks for trajectory prediction
-% - UAV pursuit and visual servoing
+
+\subsection{Object Detection on Embedded Platforms}
+
+Real-time object detection on edge devices has been dominated by the YOLO family of single-stage CNN detectors. YOLOv8~\cite{ultralytics2023} achieves strong accuracy-latency tradeoffs at small model sizes (YOLOv8n: 3.2M parameters), and its TensorRT export path is well-supported on NVIDIA Jetson platforms~\cite{jetsonorin}. However, CNN architectures process features through local receptive fields, making them inherently sensitive to pixel-level corruption from noise, blur, and low-light conditions.
+
+Transformer-based detectors offer an alternative paradigm. DETR~\cite{carion2020detr} introduced end-to-end detection with set prediction, eliminating hand-designed components like non-maximum suppression. RF-DETR~\cite{rfdetr2025} builds on this with a DINOv2~\cite{oquab2024dinov2} vision encoder, achieving competitive accuracy at real-time speeds. The self-attention mechanism aggregates information globally across the input image, which provides a structural advantage when portions of the image are degraded: uncorrupted regions can still contribute to detection. To our knowledge, no prior work has systematically compared transformer and CNN detectors under controlled multi-type degradation specifically for UAV-to-UAV tracking on edge hardware.
+
+\subsection{Visual Tracking and State Estimation}
+
+Kalman filtering~\cite{kalmanfilter1960} remains the standard approach for temporal state estimation in visual tracking systems. For UAV applications, the constant-velocity model is commonly extended to 3D using stereo or structured-light depth sensors. The Intel RealSense D455~\cite{realsensed455} provides hardware-synchronized RGB-D streams suitable for real-time depth fusion, though stereo depth accuracy degrades beyond 4--6~m and at object boundaries. Mahalanobis gating is a standard technique for rejecting outlier measurements in cluttered environments, preventing spurious detections from corrupting the state estimate.
+
+The limitation of Kalman-based tracking is its reliance on a linear motion model. During extended detection dropout (multiple frames), the constant-velocity extrapolation diverges from the true trajectory if the target is turning, accelerating, or decelerating. This motivates the integration of learned prediction models that can capture nonlinear dynamics.
+
+\subsection{Physics-Informed Neural Networks}
+
+Physics-informed neural networks (PINNs) incorporate physical laws as soft constraints in the training loss~\cite{raissi2019pinn}. Originally developed for solving partial differential equations in fluid dynamics and structural mechanics, the PINN framework has been extended to trajectory prediction in autonomous driving and robotics. The key advantage is that physics constraints regularize the network's predictions in regions of state space not well-covered by training data, which is precisely the regime encountered during detection dropout.
+
+For UAV target tracking, the relevant physical constraint is that the target's velocity magnitude is bounded by its flight envelope. Encoding $\|\mathbf{v}\| \leq v_{\max}$ as a penalty term prevents the network from extrapolating trajectories at physically impossible speeds, a failure mode that pure data-driven models exhibit when iteratively feeding predictions back as inputs during multi-second dropouts.
+
+\subsection{UAV Visual Servoing and Pursuit}
+
+Visual servoing for UAV tracking typically operates in image-based (IBVS) or position-based (PBVS) modes. IBVS controllers compute control signals directly from image features (e.g., pixel error), while PBVS controllers first estimate 3D target position and then compute control in Cartesian space. The AIRHOUND system uses a hybrid approach: yaw control is image-based (pixel error converted to angular error via focal length), while depth-fused 3D estimation enables future extension to position-based altitude and pitch control.
+
+Most UAV tracking systems treat detection and control as independent modules with a thin interface. The contribution of this work is the integration of a predictive component (PINN) between detection and control that anticipates target motion during dropout, enabling the controller to maintain tracking through intervals where a purely reactive system would lose the target.
 
 % ============================================================================
 \section{System Architecture}
@@ -308,21 +339,85 @@ The perception node publishes real-time depth quality metrics: a binary availabi
 % ============================================================================
 \section{Physics-Informed Trajectory Prediction}
 \label{sec:pinn}
-% TODO: Tracking team
-% - PINN architecture (MLP, input/output spec)
-% - Physics loss function (velocity constraint)
-% - Training pipeline (SITL + real data)
-% - Dropout recovery mechanism
-% - Online update proof-of-concept (if applicable)
+
+During detection dropout---caused by severe motion blur, occlusion, or brief sensor failures---the system must maintain target state estimates to avoid losing track. The constant-velocity Kalman filter (Section~\ref{sec:kalman}) provides short-term extrapolation, but its linear motion assumption produces increasing error over multi-second dropout intervals, particularly when the target is maneuvering. To improve prediction during extended dropouts, we integrate a physics-informed neural network (PINN)~\cite{raissi2019pinn} that learns nonlinear trajectory dynamics while enforcing physical feasibility constraints.
+
+\subsection{Network Architecture}
+\label{sec:pinn_architecture}
+
+The trajectory PINN is a fully connected feedforward network with 3 hidden layers of 128 units each and ReLU activations. The input is a 7-dimensional vector consisting of the current Kalman state estimate $[x, y, z, v_x, v_y, v_z]$ concatenated with the prediction horizon $\Delta t$ in seconds. The output is the predicted 6-dimensional state $[\hat{x}', \hat{y}', \hat{z}', \hat{v}_x', \hat{v}_y', \hat{v}_z']$ at time $t + \Delta t$.
+
+All inputs and outputs are standardized using per-feature mean and standard deviation computed from the training set. The normalization statistics are stored alongside the model weights and applied at inference time.
+
+\subsection{Physics-Informed Loss}
+\label{sec:pinn_loss}
+
+The training loss combines a standard data-fitting term with a physics constraint term:
+\begin{equation}
+    \mathcal{L} = \mathcal{L}_{\text{data}} + \lambda_{\text{phys}} \, \mathcal{L}_{\text{phys}}
+    \label{eq:pinn_loss}
+\end{equation}
+where $\mathcal{L}_{\text{data}}$ is the mean squared error between predicted and ground-truth future states, and $\mathcal{L}_{\text{phys}}$ penalizes physically infeasible predictions.
+
+The physics loss enforces a velocity magnitude constraint:
+\begin{equation}
+    \mathcal{L}_{\text{phys}} = \frac{1}{N} \sum_{i=1}^{N} \max\left(0, \; \|\hat{\mathbf{v}}_i\| - v_{\max}\right)^2
+    \label{eq:phys_loss}
+\end{equation}
+where $v_{\max} = 10$~m/s is the maximum physically plausible target speed and $\hat{\mathbf{v}}_i$ is the predicted velocity vector for sample $i$. The weighting factor is set to $\lambda_{\text{phys}} = 0.1$. This soft constraint prevents the network from predicting unrealistic velocities during extrapolation, which is particularly important during extended dropout intervals when the network iteratively feeds its own predictions back as input.
+
+\subsection{Training}
+\label{sec:pinn_training}
+
+Training data is generated from PX4 SITL trajectories using scripted target motion scenarios (circular, sinusoidal, figure-eight, and 3D patterns). Each trajectory is recorded as a ROS~2 rosbag containing timestamped 3D position and velocity from the Kalman filter. Sliding windows of $(state_t, \Delta t, state_{t+\Delta t})$ tuples are extracted for supervision.
+
+The network is trained for 50 epochs with the Adam optimizer. The best model is selected by validation loss, achieving a final validation MSE of 0.069. Both PyTorch (\texttt{.pth}) and ONNX (\texttt{.onnx}) model formats are exported for deployment flexibility.
+
+\subsection{Deployment and Dropout Recovery}
+\label{sec:pinn_deployment}
+
+The PINN runs as a standalone ROS~2 node (\texttt{pinn\_prediction\_node}) that subscribes to the Kalman filter state on \texttt{/tracking/kalman\_state} and monitors detection availability via \texttt{/perception/target\_3d}. When no detection is received for a configurable timeout period (default: 0.1~s), the node activates and begins publishing predicted states on \texttt{/tracking/pinn\_predicted} at 30~Hz.
+
+During active prediction, the PINN operates iteratively: each predicted state becomes the input for the next prediction step, producing a trajectory forecast that extends until either (a)~a new detection is received, (b)~the maximum prediction duration is exceeded (default: 2.0~s), or (c)~the predicted velocity violates the physical constraint bound.
+
+The tracking node consumes PINN predictions during dropout to compute yaw commands, replacing the Kalman filter's linear extrapolation. This component is modular: it is enabled or disabled via the \texttt{airhound.yaml} configuration file. When disabled, the system falls back to Kalman-only extrapolation. Comparative evaluation of PINN vs.\ Kalman-only dropout recovery is planned for hardware flight testing (Section~\ref{sec:flight_testing}).
+
+The PINN node supports both PyTorch and ONNX Runtime inference backends. For Jetson deployment, the ONNX backend enables integration with TensorRT optimization, sharing the GPU inference pipeline with the detection model.
 
 % ============================================================================
-\section{Anticipatory Control}
+\section{Yaw Tracking Control}
 \label{sec:control}
-% TODO: Controls (primary), Tracking team contributes
-% - 3D control node: yaw + pitch viewing + altitude
-% - PID structure for each axis
-% - Safety limits and failsafe behavior
-% - PINN-driven anticipatory commands during dropout
+
+The current control implementation focuses on yaw-axis tracking as the foundational control mode. The UAV maintains a fixed hover position while rotating to keep the detected target centered in the camera's field of view. Pitch viewing angle and altitude adjustments are planned extensions (Section~\ref{sec:conclusion}).
+
+\subsection{Control Architecture}
+\label{sec:control_architecture}
+
+The control pipeline consists of two nodes operating in sequence:
+
+\begin{enumerate}
+    \item \textbf{Tracking Node} (\texttt{yaw\_error\_node}): Computes the angular error between the detected target and image center using the camera's horizontal focal length $f_x$:
+    \begin{equation}
+        e_{\text{yaw}} = \frac{u_{\text{target}} - c_x}{f_x}
+        \label{eq:yaw_error}
+    \end{equation}
+    where $u_{\text{target}}$ is the horizontal pixel coordinate of the highest-confidence detection and $c_x$ is the principal point. The error (in radians) is clipped to $\pm 1.0$~rad/s and passed through a deadband of 0.01~rad to suppress jitter. During detection dropout, the node substitutes Kalman extrapolation or PINN predictions as described in Section~\ref{sec:pinn_deployment}.
+
+    \item \textbf{PX4 Converter Node} (\texttt{px4\_converter\_gazebo} for SITL, \texttt{px4\_converter\_node} for flight): A C++ node that subscribes to \texttt{/yaw\_command}, constructs PX4 \texttt{TrajectorySetpoint} messages with the commanded yaw angle and a fixed hover position, and streams them at 10~Hz to maintain offboard mode. The node handles the PX4 arming sequence (offboard mode request followed by arm command) and implements a safety timeout that ceases control output after 5~s without a yaw command.
+\end{enumerate}
+
+\subsection{Dropout Recovery Modes}
+\label{sec:dropout_modes}
+
+The tracking node implements a configurable fallback hierarchy for detection dropout:
+
+\begin{enumerate}
+    \item \textbf{PINN prediction} (if enabled): Uses the physics-informed network's predicted 3D target position to compute yaw error via $\arctan(X / Z)$ in the camera optical frame.
+    \item \textbf{Kalman extrapolation} (if enabled): Uses the Kalman filter's constant-velocity position estimate for the same yaw computation.
+    \item \textbf{Last-rate hold}: Maintains the most recent yaw rate command as a zero-order hold.
+\end{enumerate}
+
+Each mode activates only when the higher-priority source is unavailable or disabled. The active mode is published on \texttt{/tracking/mode} (encoded as 0--3) for monitoring and post-flight analysis.
 
 % ============================================================================
 \section{Experimental Setup}
@@ -409,17 +504,30 @@ The following metrics are computed from flight data:
 % ============================================================================
 \section{Discussion}
 \label{sec:discussion}
-% TODO: Lead
-% - Key findings synthesis
-% - Limitations
-% - Comparison with prior work
+
+\subsection{Detector Architecture and Degradation}
+
+The degradation evaluation reveals a clear architectural advantage for transformer-based detection under noise and lighting variation. RF-DETR's +39.8 percentage point mAP advantage at maximum Gaussian noise severity is consistent with the self-attention mechanism's ability to aggregate global context: when local pixel regions are corrupted, uncorrupted regions still contribute to detection through the attention weights. CNN detectors like YOLOv8n, which rely on local convolutional kernels, lose access to clean features proportional to the corruption fraction.
+
+The comparable performance of both architectures under motion blur is notable. Blur affects the entire image globally (all pixels shift in the blur direction), eliminating the local-vs-global distinction that gives transformers their advantage under localized corruption. This suggests that blur mitigation requires approaches outside the detector architecture, such as electronic image stabilization or exposure time reduction.
+
+\subsection{PINN vs.\ Kalman Prediction}
+
+The physics-informed loss serves a specific function: preventing velocity explosion during iterative prediction. When the PINN feeds its own outputs back as inputs during multi-second dropouts, unconstrained networks produce accelerating trajectories. The $\|\mathbf{v}\| \leq 10$~m/s soft constraint bounds this divergence. Whether the PINN outperforms constant-velocity Kalman extrapolation for short dropouts ($<$0.5~s) is an empirical question that hardware flight testing will resolve; the Kalman filter's simplicity may suffice for brief occlusion events where the target trajectory remains approximately linear.
+
+\subsection{Limitations}
+
+Several limitations apply to the current system. First, depth accuracy from the D455 stereo pair degrades beyond 4--6~m, limiting the effective tracking range. Second, the current control implementation is yaw-only; altitude and pitch viewing control are staged future extensions. Third, the PINN training data comes from SITL scripted trajectories, not real flight data; the network may underperform on real target motion patterns not represented in the training distribution. Fourth, the degradation evaluation uses synthetic corruption applied to clean validation images, which may not capture the joint distribution of real-world degradation (e.g., simultaneous blur and low light during dusk flights).
+
+The modular architecture is designed to address these limitations incrementally: the PINN can be retrained on real flight data without modifying other pipeline components, and additional control axes can be added through the existing ROS~2 topic interface.
 
 % ============================================================================
 \section{Conclusion}
 \label{sec:conclusion}
-% TODO: Lead
-% - Summary of contributions
-% - Future work (full autonomy, multi-target, etc.)
+
+We presented AIRHOUND, a modular perception-to-control pipeline for autonomous UAV target pursuit running on edge hardware. The system makes three contributions relevant to the DS112 track theme of machine learning from challenging data. First, RF-DETR demonstrates a substantial robustness advantage over YOLOv8n under Gaussian noise and low-light degradation (+39.8 and +39.4 percentage points at maximum severity respectively), while both architectures remain vulnerable to severe motion blur. Second, the physics-informed trajectory prediction network provides bounded extrapolation during detection dropout, enforcing velocity constraints that prevent divergence during iterative multi-second predictions. Third, the modular ROS~2 architecture enables systematic ablation of each component (detector, Kalman filter, PINN) through runtime configuration.
+
+Current work focuses on hardware flight validation using the Jetson Orin with a real RealSense D455 camera, which will populate the results section with detection latency, tracking accuracy, and dropout recovery metrics from real flight data. Future extensions include multi-axis control (altitude and pitch viewing), PINN retraining on flight data, and multi-target tracking.
 
 % ============================================================================
 \section*{Acknowledgments}

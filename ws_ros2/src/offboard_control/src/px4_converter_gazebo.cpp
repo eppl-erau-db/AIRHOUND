@@ -68,19 +68,26 @@ public:
 
 private:
     void yaw_command_callback(const std_msgs::msg::Float64::SharedPtr msg) {
-        // Convert demo command to PX4 format
-        target_yaw_ = static_cast<float>(msg->data);
+        // Apply proportional gain to yaw error for responsive tracking.
+        // The tracking node publishes angular error (rad); we scale it to yaw rate.
+        // Gain of 3.0 means 0.3 rad error → 0.9 rad/s yawspeed (~50°/s).
+        double yaw_error = msg->data;
+        double gain = 3.0;
+        target_yaw_ = static_cast<float>(yaw_error * gain);
+        
+        // Clamp to PX4 safe yaw rate (±2.0 rad/s ≈ ±115°/s)
+        if (target_yaw_ > 2.0f) target_yaw_ = 2.0f;
+        if (target_yaw_ < -2.0f) target_yaw_ = -2.0f;
+        
         last_command_time_ = this->now();
         command_count_++;
         
-        // Normalize yaw to [-π, π] range for PX4
-        while (target_yaw_ > M_PI) target_yaw_ -= 2 * M_PI;
-        while (target_yaw_ < -M_PI) target_yaw_ += 2 * M_PI;
-        
-        double degrees = target_yaw_ * 180.0 / M_PI;
-        RCLCPP_INFO(this->get_logger(), 
-            "🎯 Converted yaw command %d: %.3f rad (%.1f°) → PX4 Gazebo",
-            command_count_, target_yaw_, degrees);
+        double degrees_per_sec = target_yaw_ * 180.0 / M_PI;
+        if (command_count_ % 30 == 0) {
+            RCLCPP_INFO(this->get_logger(), 
+                "🎯 Yaw cmd %d: err=%.3f × %.1f → %.1f°/s",
+                command_count_, yaw_error, gain, degrees_per_sec);
+        }
         
         // Update status
         has_received_command_ = true;
@@ -103,19 +110,16 @@ private:
         auto current_time = this->now();
         uint64_t timestamp = current_time.nanoseconds() / 1000;
         
-        // Always publish offboard control mode when we have commands
-        if (has_received_command_) {
-            publish_offboard_control_mode(timestamp);
-            publish_trajectory_setpoint(timestamp);
-        }
+        // ALWAYS publish offboard control mode and setpoints.
+        // PX4 requires continuous setpoint streaming to stay in offboard mode.
+        // If no yaw command received yet, hold heading (yawspeed=0).
+        publish_offboard_control_mode(timestamp);
+        publish_trajectory_setpoint(timestamp);
         
         // Handle arming sequence: PX4 requires setpoint streaming -> offboard -> arm
-        // Send commands periodically until armed (handles DDS latency and PX4 readiness)
-        if (auto_arm_ && has_received_command_) {
+        if (auto_arm_) {
             if (!vehicle_armed_ && control_counter_ > 10 && control_counter_ % 10 == 0) {
-                // Send offboard mode command first
                 send_offboard_command(timestamp);
-                // Then send arm command (PX4 needs offboard active to accept arm in offboard)
                 send_arm_command(timestamp);
                 RCLCPP_INFO(this->get_logger(), 
                     "🔄 Arming attempt (counter=%d, armed=%s, offboard=%s)",
@@ -166,10 +170,10 @@ private:
         msg.velocity = {0.0f, 0.0f, 0.0f};
         msg.acceleration = {0.0f, 0.0f, 0.0f};
         
-        // Apply yaw command directly as absolute angle
-        // tracking_node outputs angular error which oscillates ±, producing side-to-side yaw
-        msg.yaw = target_yaw_;
-        msg.yawspeed = 0.0f;
+        // Apply yaw error as yaw rate (yawspeed) for smooth tracking
+        // The tracking node outputs angular error; use it as a proportional yaw rate.
+        msg.yaw = std::nanf("");  // NaN = don't command absolute yaw
+        msg.yawspeed = target_yaw_;  // target_yaw_ holds the latest yaw error as rate
         msg.timestamp = timestamp;
         
         trajectory_setpoint_pub_->publish(msg);

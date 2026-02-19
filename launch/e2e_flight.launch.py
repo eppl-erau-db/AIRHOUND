@@ -56,12 +56,13 @@ SAFETY WARNING:
 
 import os
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo, IncludeLaunchDescription, GroupAction
+from launch.actions import DeclareLaunchArgument, LogInfo, IncludeLaunchDescription, GroupAction, ExecuteProcess
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch.conditions import IfCondition, UnlessCondition
 from ament_index_python.packages import get_package_share_directory
+from datetime import datetime
 
 
 def generate_launch_description():
@@ -208,6 +209,19 @@ def generate_launch_description():
         description='Launch RealSense camera node (only for camera_source=realsense)'
     )
 
+    # Data recording
+    record_arg = DeclareLaunchArgument(
+        'record',
+        default_value='true',
+        description='Record rosbag with all topics for post-flight analysis'
+    )
+
+    record_images_arg = DeclareLaunchArgument(
+        'record_images',
+        default_value='false',
+        description='Also record raw camera images (large files)'
+    )
+
     # ==========================================================================
     # Condition helpers
     # ==========================================================================
@@ -340,6 +354,85 @@ def generate_launch_description():
     )
 
     # ==========================================================================
+    # Data Recording (rosbag)
+    # ==========================================================================
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    bag_dir = os.path.expanduser('~/airhound_bags')
+    bag_path = os.path.join(bag_dir, f'flight_{timestamp}')
+
+    # All topics needed for paper metrics (Section 8 of manuscript)
+    record_topics = [
+        # Perception
+        '/detections',
+        '/perception/target_3d',
+        '/perception/latency_ms',
+        '/perception/fps',
+        '/perception/depth_available',
+        '/perception/depth_quality',
+        # Tracking
+        '/yaw_command',
+        '/tracking/kalman_state',
+        '/tracking/mode',
+        # PINN (recorded even if disabled; just won't have messages)
+        '/tracking/pinn_predicted',
+        '/tracking/pinn_state',
+        '/tracking/pinn_active',
+        # PX4 outgoing
+        '/fmu/in/trajectory_setpoint',
+        '/fmu/in/offboard_control_mode',
+        '/fmu/in/vehicle_command',
+        # PX4 ground truth
+        '/fmu/out/vehicle_attitude',
+        '/fmu/out/vehicle_local_position_v1',
+        # Camera intrinsics
+        '/camera/camera_info',
+        # Converter status
+        '/px4_converter_status',
+    ]
+
+    qos_override = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        '..', 'config', 'recording_qos.yaml'
+    )
+
+    record_bag = ExecuteProcess(
+        cmd=[
+            'ros2', 'bag', 'record',
+            '--output', bag_path,
+            '--compression-mode', 'file',
+            '--compression-format', 'zstd',
+            '--qos-profile-overrides-path', qos_override,
+            *record_topics,
+        ],
+        output='log',
+        condition=IfCondition(LaunchConfiguration('record')),
+        sigterm_timeout='5',
+        sigkill_timeout='10',
+    )
+
+    record_images_proc = ExecuteProcess(
+        cmd=[
+            'ros2', 'bag', 'record',
+            '--output', bag_path + '_images',
+            '--compression-mode', 'file',
+            '--compression-format', 'zstd',
+            '--qos-profile-overrides-path', qos_override,
+            '/camera/color/image_raw',
+            '/camera/depth/image_raw',
+        ],
+        output='log',
+        condition=IfCondition(
+            PythonExpression([
+                "'", LaunchConfiguration('record'), "' == 'true' and ",
+                "'", LaunchConfiguration('record_images'), "' == 'true'"
+            ])
+        ),
+        sigterm_timeout='5',
+        sigkill_timeout='10',
+    )
+
+    # ==========================================================================
     # Launch Description
     # ==========================================================================
     
@@ -367,12 +460,15 @@ def generate_launch_description():
         px4_publish_rate_arg,
         safety_timeout_arg,
         launch_camera_arg,
+        record_arg,
+        record_images_arg,
         
         # Safety warnings
         LogInfo(msg='=== AIRHOUND E2E Flight Mode ==='),
         LogInfo(msg='WARNING: This mode controls a REAL drone!'),
         LogInfo(msg=['Camera source: ', LaunchConfiguration('camera_source')]),
         LogInfo(msg='Ensure MicroXRCE Agent is running and PX4 is connected!'),
+        LogInfo(msg=f'Recording to: {bag_path}'),
         
         # Launch nodes
         realsense_node,
@@ -380,6 +476,10 @@ def generate_launch_description():
         mock_detector_node,
         tracking_node,
         px4_converter_gazebo,
+        
+        # Data recording
+        record_bag,
+        record_images_proc,
         
         LogInfo(msg='All nodes started. Monitor detections and yaw commands.'),
     ])

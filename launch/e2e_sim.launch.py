@@ -4,140 +4,99 @@ AIRHOUND E2E Simulation Launch File
 
 Launches the complete end-to-end pipeline for SITL simulation testing:
   1. Mock Detector - Generates synthetic detections (no camera/YOLO needed)
-  2. Tracking Node - Converts detections to yaw rate commands
+  2. Tracking Node - Converts detections to yaw commands (+ Kalman + optional PINN)
   3. PX4 Converter - Sends yaw commands to PX4 via DDS
+  4. PINN Node (optional) - Predicts trajectory during detection dropout
 
 Prerequisites:
   - PX4 SITL + Gazebo running (make px4_sitl gz_x500)
-  - MicroXRCE-DDS Agent running (./middleware/start_microxrce_agent.sh)
+  - MicroXRCE-DDS Agent running
   - Workspace built and sourced
 
 Usage:
   ros2 launch airhound e2e_sim.launch.py
-  ros2 launch airhound e2e_sim.launch.py config_file:=/path/to/custom.yaml
-  ros2 launch airhound e2e_sim.launch.py motion_type:=sinusoidal max_rate:=0.5
+  ros2 launch airhound e2e_sim.launch.py enable_pinn:=true
+  ros2 launch airhound e2e_sim.launch.py motion_type:=sinusoidal enable_kalman:=true
 
 Data Flow:
-  mock_detector -> /detections -> tracking_node -> /yaw_command -> px4_converter_gazebo -> /fmu/in/* -> PX4
-
-Topic Reference:
-  Published:
-    /detections             (vision_msgs/Detection2DArray) - Mock 2D detections
-    /camera/camera_info     (sensor_msgs/CameraInfo)       - Simulated camera intrinsics
-    /yaw_command            (std_msgs/Float64)             - Yaw rate command
-    /fmu/in/*               (px4_msgs/*)                   - PX4 offboard commands
-
-  Note: In sim mode, no depth or /perception/target_3d is published.
-        For 3D position testing, use flight mode with RealSense D455.
+  mock_detector -> /detections -> tracking_node -> /yaw_command -> px4_converter -> PX4
+                                       |
+                                       +-> /tracking/kalman_state -> pinn_node (if enabled)
+                                       +<- /tracking/pinn_predicted <- pinn_node
 """
 
 import os
+from datetime import datetime
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, LogInfo, GroupAction
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.actions import DeclareLaunchArgument, LogInfo, GroupAction, ExecuteProcess
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
     # ==========================================================================
     # Launch Arguments
     # ==========================================================================
-    
-    # Config file path
-    config_file_arg = DeclareLaunchArgument(
-        'config_file',
-        default_value='',
-        description='Path to YAML config file (optional, uses defaults if not provided)'
-    )
-    
-    # Mock detector arguments
+
+    # Mock detector
     moving_target_arg = DeclareLaunchArgument(
-        'moving_target',
-        default_value='true',
-        description='Whether to make the simulated target move'
-    )
-    
+        'moving_target', default_value='true')
     motion_type_arg = DeclareLaunchArgument(
-        'motion_type',
-        default_value='circular',
-        description='Motion pattern: circular, sinusoidal, figure8, static'
-    )
-    
+        'motion_type', default_value='circular',
+        description='circular, sinusoidal, figure8, static')
     motion_speed_arg = DeclareLaunchArgument(
-        'motion_speed',
-        default_value='0.5',
-        description='Motion speed in rad/s'
-    )
-    
+        'motion_speed', default_value='0.3')
     motion_radius_arg = DeclareLaunchArgument(
-        'motion_radius',
-        default_value='200.0',
-        description='Motion radius in pixels from center'
-    )
-    
+        'motion_radius', default_value='10.0')
+    target_distance_arg = DeclareLaunchArgument(
+        'target_distance', default_value='15.0')
     publish_rate_arg = DeclareLaunchArgument(
-        'publish_rate_hz',
-        default_value='30.0',
-        description='Detection publish rate in Hz'
-    )
-    
+        'publish_rate_hz', default_value='30.0')
     image_width_arg = DeclareLaunchArgument(
-        'image_width',
-        default_value='1280',
-        description='Simulated image width'
-    )
-    
+        'image_width', default_value='1280')
     image_height_arg = DeclareLaunchArgument(
-        'image_height',
-        default_value='720',
-        description='Simulated image height'
-    )
-    
+        'image_height', default_value='720')
     add_noise_arg = DeclareLaunchArgument(
-        'add_noise',
-        default_value='false',
-        description='Add random noise to target positions'
-    )
-    
-    # Tracking arguments
+        'add_noise', default_value='false')
+
+    # Tracking
     max_rate_arg = DeclareLaunchArgument(
-        'max_rate',
-        default_value='1.0',
-        description='Maximum yaw rate command (rad/s)'
-    )
-    
+        'max_rate', default_value='1.0')
     deadband_arg = DeclareLaunchArgument(
-        'deadband',
-        default_value='0.01',
-        description='Deadband threshold to avoid jitter (rad)'
-    )
-    
-    # PX4 converter arguments
+        'deadband', default_value='0.01')
+
+    # Kalman filter
+    enable_kalman_arg = DeclareLaunchArgument(
+        'enable_kalman', default_value='true',
+        description='Enable 3D Kalman filter for state estimation')
+
+    # PINN
+    enable_pinn_arg = DeclareLaunchArgument(
+        'enable_pinn', default_value='false',
+        description='Enable PINN trajectory prediction during dropout')
+    pinn_model_arg = DeclareLaunchArgument(
+        'pinn_model_path', default_value='models/pinn/pinn_best.pth')
+    pinn_norm_arg = DeclareLaunchArgument(
+        'pinn_norm_stats_path', default_value='models/pinn/norm_stats.npz')
+
+    # PX4
     auto_arm_arg = DeclareLaunchArgument(
-        'auto_arm',
-        default_value='true',
-        description='Automatically arm and enter offboard mode'
-    )
-    
+        'auto_arm', default_value='true')
     px4_publish_rate_arg = DeclareLaunchArgument(
-        'px4_publish_rate',
-        default_value='10.0',
-        description='PX4 offboard control message rate (Hz)'
-    )
-    
+        'px4_publish_rate', default_value='10.0')
     safety_timeout_arg = DeclareLaunchArgument(
-        'safety_timeout',
-        default_value='5.0',
-        description='Seconds without command before failsafe'
-    )
+        'safety_timeout', default_value='5.0')
+
+    # Recording (off by default for sim, on by default for flight)
+    record_arg = DeclareLaunchArgument(
+        'record', default_value='false',
+        description='Record rosbag for post-flight analysis')
 
     # ==========================================================================
     # Nodes
     # ==========================================================================
-    
-    # Mock Detector Node
-    # Publishes: /detections (Detection2DArray), /camera/camera_info (CameraInfo)
+
     mock_detector_node = Node(
         package='airhound_perception',
         executable='mock_detector',
@@ -153,6 +112,7 @@ def generate_launch_description():
             'motion_type': LaunchConfiguration('motion_type'),
             'motion_radius': LaunchConfiguration('motion_radius'),
             'motion_speed': LaunchConfiguration('motion_speed'),
+            'target_distance': LaunchConfiguration('target_distance'),
             'target_width': 120,
             'target_height': 80,
             'confidence': 0.85,
@@ -162,10 +122,7 @@ def generate_launch_description():
             'noise_std': 5.0,
         }]
     )
-    
-    # Tracking Node
-    # Subscribes: /detections, /camera/camera_info
-    # Publishes: /yaw_command (Float64)
+
     tracking_node = Node(
         package='tracking_geometry',
         executable='tracking_node',
@@ -174,12 +131,34 @@ def generate_launch_description():
         parameters=[{
             'max_rate': LaunchConfiguration('max_rate'),
             'deadband': LaunchConfiguration('deadband'),
+            'enable_kalman': LaunchConfiguration('enable_kalman'),
+            'kalman_process_noise_pos': 0.1,
+            'kalman_process_noise_vel': 1.0,
+            'kalman_measurement_noise': 0.05,
+            'kalman_gate_threshold': 3.0,
+            'kalman_max_missed': 30,
+            'enable_pinn': LaunchConfiguration('enable_pinn'),
+            'pinn_dropout_timeout': 0.1,
         }]
     )
-    
-    # PX4 Converter (Gazebo SITL)
-    # Subscribes: /yaw_command (Float64)
-    # Publishes: /fmu/in/offboard_control_mode, /fmu/in/trajectory_setpoint, /fmu/in/vehicle_command
+
+    pinn_node = Node(
+        package='tracking_geometry',
+        executable='pinn_node',
+        name='pinn_prediction_node',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('enable_pinn')),
+        parameters=[{
+            'model_path': LaunchConfiguration('pinn_model_path'),
+            'norm_stats_path': LaunchConfiguration('pinn_norm_stats_path'),
+            'prediction_horizon': 0.1,
+            'dropout_timeout': 0.1,
+            'max_prediction_time': 2.0,
+            'use_onnx': False,
+            'publish_rate_hz': 30.0,
+        }]
+    )
+
     px4_converter_gazebo = Node(
         package='offboard_control',
         executable='px4_converter_gazebo',
@@ -193,35 +172,90 @@ def generate_launch_description():
     )
 
     # ==========================================================================
+    # Data Recording (rosbag)
+    # ==========================================================================
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    bag_path = os.path.join(os.path.expanduser('~/airhound_bags'), f'sim_{timestamp}')
+
+    record_topics = [
+        '/detections',
+        '/perception/target_3d',
+        '/perception/latency_ms',
+        '/perception/fps',
+        '/perception/depth_available',
+        '/perception/depth_quality',
+        '/yaw_command',
+        '/tracking/kalman_state',
+        '/tracking/mode',
+        '/tracking/pinn_predicted',
+        '/tracking/pinn_state',
+        '/tracking/pinn_active',
+        '/fmu/in/trajectory_setpoint',
+        '/fmu/in/offboard_control_mode',
+        '/fmu/in/vehicle_command',
+        '/fmu/out/vehicle_attitude',
+        '/fmu/out/vehicle_local_position_v1',
+        '/camera/camera_info',
+        '/px4_converter_status',
+    ]
+
+    qos_override = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        '..', 'config', 'recording_qos.yaml'
+    )
+
+    record_bag = ExecuteProcess(
+        cmd=[
+            'ros2', 'bag', 'record',
+            '--output', bag_path,
+            '--compression-mode', 'file',
+            '--compression-format', 'zstd',
+            '--qos-profile-overrides-path', qos_override,
+            *record_topics,
+        ],
+        output='log',
+        condition=IfCondition(LaunchConfiguration('record')),
+        sigterm_timeout='5',   # give recorder 5s to finalize MCAP on SIGTERM
+        sigkill_timeout='10',  # give 10s before SIGKILL
+    )
+
+    # ==========================================================================
     # Launch Description
     # ==========================================================================
-    
+
     return LaunchDescription([
-        # Declare arguments
-        config_file_arg,
+        # Arguments
         moving_target_arg,
         motion_type_arg,
         motion_speed_arg,
         motion_radius_arg,
+        target_distance_arg,
         publish_rate_arg,
         image_width_arg,
         image_height_arg,
         add_noise_arg,
         max_rate_arg,
         deadband_arg,
+        enable_kalman_arg,
+        enable_pinn_arg,
+        pinn_model_arg,
+        pinn_norm_arg,
         auto_arm_arg,
         px4_publish_rate_arg,
         safety_timeout_arg,
-        
-        # Info messages
-        LogInfo(msg='=== AIRHOUND E2E Simulation Mode ==='),
-        LogInfo(msg='Starting: mock_detector -> tracking -> px4_converter_gazebo'),
-        LogInfo(msg='Make sure PX4 SITL + Gazebo and MicroXRCE Agent are running!'),
-        
-        # Launch nodes
+        record_arg,
+
+        # Info
+        LogInfo(msg='=== AIRHOUND E2E Simulation ==='),
+        LogInfo(msg='mock_detector -> tracking (Kalman/PINN) -> px4_converter'),
+
+        # Nodes
         mock_detector_node,
         tracking_node,
+        pinn_node,
         px4_converter_gazebo,
-        
-        LogInfo(msg='All nodes started. Watch Gazebo for drone movement!'),
+
+        # Recording
+        record_bag,
     ])
