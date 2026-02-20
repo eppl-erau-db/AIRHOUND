@@ -66,7 +66,10 @@ AIRHOUND/
 
 ### Target Platforms
 - **Development**: Ubuntu 22.04 (x86_64) with ROS2 Humble
-- **Deployment**: Jetson Orin Nano (aarch64) with JetPack 6.x, ROS2 Humble
+- **Deployment**: Jetson Orin Nano 16GB (aarch64, `airhound` user) with JetPack 6.2.1, ROS2 Humble
+- **Flight Controller**: Auterion PX4 FMU v6X.x, Ethernet IP `192.168.0.4`
+- **Companion**: Jetson `eno1` at `192.168.0.3` (connected via Auterion baseboard Ethernet)
+- **HITL**: See `docs/HITL_SETUP.md` for full procedure
 
 ### Key Dependencies
 - ROS2 Humble
@@ -198,8 +201,16 @@ export_to_tensorrt(Path('weights/checkpoint_best_ema.pth'), fp16=True)
 1. **DO NOT** search/grep in build directories (`install/`, `build/`, `log/`) - causes OOM
 2. **TensorRT engines are platform-specific** - must regenerate on each platform
 3. **px4_msgs must match PX4 version** - sync with PX4-Autopilot if issues arise
-4. **Camera topics vary** - RealSense uses `/camera/color/image_raw`, others may differ
+4. **Camera topic namespace** - `realsense2_camera` publishes under `/camera/camera/` (nested),
+   not `/camera/`. Actual topics: `/camera/camera/color/image_raw`, `/camera/camera/depth/image_raw`.
+   Scripts checking `/camera/color/image_raw` will get a false negative.
 5. **Jetson power mode matters** - use `sudo nvpmodel -m 0` for max performance
+6. **ModemManager conflicts** - on any machine with `/dev/ttyACM0` (Pixhawk USB), stop ModemManager
+   before using `mavlink_shell.py`: `sudo systemctl stop ModemManager`
+7. **PX4 MAVLink UDP is unicast** - PX4 only responds after receiving a packet from the GCS.
+   Always send at least one heartbeat to `192.168.0.4:14550` before expecting replies.
+8. **fmu-v6x Ethernet config** - uses `netman` + `/fs/microsd/net.cfg`, NOT `NET_IP0`–`NET_IP3`
+   parameters. See `docs/HITL_SETUP.md` for details.
 
 ## Testing
 

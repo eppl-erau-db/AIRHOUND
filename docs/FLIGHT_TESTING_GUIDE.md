@@ -1,8 +1,8 @@
 # AIRHOUND Flight Testing Guide
 
-> **Version:** 1.0  
-> **Date:** January 2026  
-> **Platform:** Jetson Orin Nano 16GB + Intel RealSense D455
+> **Version:** 1.1
+> **Date:** February 2026
+> **Platform:** Jetson Orin Nano 16GB + Intel RealSense D455 + Auterion PX4 FMU v6X.x
 
 ---
 
@@ -41,24 +41,33 @@ cd ~/AIRHOUND
 |-----------|-------|------------|
 | Compute | Jetson Orin Nano 16GB | - |
 | Camera | Intel RealSense D455 | USB 3.2 (use blue port) |
-| Flight Controller | Pixhawk 6C | USB or UART |
-| Power | 5V 4A min | Barrel jack |
+| Flight Controller | Auterion PX4 FMU v6X.x | Ethernet via Auterion baseboard |
+| Power | DC supply (Jetson) + USB power (Pixhawk during ground ops) | - |
 
 ### Physical Connections
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    JETSON ORIN NANO                          │
-├──────────────┬──────────────┬──────────────┬────────────────┤
-│  USB 3.2 (1) │  USB 3.2 (2) │  USB 2.0     │   UART/GPIO    │
-│  ┌────────┐  │  (Available) │  (Available) │   ┌────────┐   │
-│  │  D455  │  │              │              │   │Pixhawk │   │
-│  └────────┘  │              │              │   │TELEM2  │   │
-└──────────────┴──────────────┴──────────────┴────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                   JETSON ORIN NANO                          │
+├──────────────┬──────────────┬──────────────────────────────┤
+│  USB 3.2 (1) │  USB 3.2 (2) │   Auterion Baseboard         │
+│  ┌────────┐  │  (Available) │   ┌──────────────────────┐   │
+│  │  D455  │  │              │   │  Ethernet (eno1)      │   │
+│  └────────┘  │              │   │  192.168.0.3          │   │
+│              │              │   └────────┬─────────────┘   │
+└──────────────┴──────────────┴────────────┼─────────────────┘
+                                           │ Ethernet
+                               ┌───────────▼─────────────┐
+                               │   Pixhawk FMU v6X.x      │
+                               │   192.168.0.4             │
+                               │   uXRCE-DDS: port 8888    │
+                               │   MAVLink: port 14550      │
+                               └─────────────────────────┘
 ```
 
 **IMPORTANT:**
 - D455 **must** use USB 3.x port (check with `lsusb -t` for 5000M speed)
+- Jetson↔Pixhawk communication is entirely over Ethernet — no USB data link required
 - Secure all cables with strain relief before flight
 
 ---
@@ -188,7 +197,8 @@ ros2 topic echo /yaw_command
 ros2 topic echo /fmu/in/trajectory_setpoint
 
 # View camera feed (if display available)
-ros2 run rqt_image_view rqt_image_view /camera/color/image_raw
+# NOTE: realsense2_camera uses /camera/camera/ namespace (nested)
+ros2 run rqt_image_view rqt_image_view /camera/camera/color/image_raw
 ```
 
 ---
@@ -247,13 +257,16 @@ ros2 bag record --serialization-format cdr \
 | "No detections" | Lower confidence: edit `perception.yaml` |
 | "False positives" | Raise confidence threshold |
 
-### PX4 Communication
+### PX4 / Ethernet Communication
 
 | Problem | Solution |
 |---------|----------|
-| "No serial device" | Check USB connection, try `ls /dev/ttyACM*` |
-| "DDS agent failed" | Install: `sudo apt install ros-humble-micro-ros-agent` |
-| "No PX4 topics" | Verify PX4 has DDS enabled in firmware |
+| Can't ping Pixhawk (192.168.0.4) | Check Jetson route: `ip route show \| grep 192.168.0.4` |
+| `mavlink_shell.py` hangs | `sudo systemctl stop ModemManager` then retry |
+| "No PX4 topics" | Start DDS agent: `MicroXRCEAgent udp4 -p 8888` on Jetson |
+| "DDS agent not found" | Install micro-xrce-dds-agent or build from source |
+
+For full PX4 Ethernet / HITL setup details see [HITL_SETUP.md](HITL_SETUP.md).
 
 ### Quick Fixes
 
@@ -349,11 +362,14 @@ detector_node:
 
 | Topic | Type | Rate | Description |
 |-------|------|------|-------------|
-| `/camera/color/image_raw` | Image | 30Hz | RGB camera feed |
-| `/camera/depth/image_raw` | Image | 30Hz | Depth image (uint16) |
+| `/camera/camera/color/image_raw` | Image | 30Hz | RGB camera feed |
+| `/camera/camera/depth/image_raw` | Image | 30Hz | Depth image (uint16) |
 | `/detections` | Detection2DArray | ~25Hz | Drone detections |
 | `/yaw_command` | Float64 | ~25Hz | Yaw rate command |
 | `/fmu/in/trajectory_setpoint` | TrajectorySetpoint | 10Hz | PX4 commands |
+
+> **Note:** `realsense2_camera` publishes under `/camera/camera/` (nested namespace),
+> not `/camera/`. Use `ros2 topic list | grep camera` to confirm active topics.
 
 ---
 
@@ -367,4 +383,4 @@ detector_node:
 
 ---
 
-*Last updated: January 2026 | AIRHOUND Perception Team*
+*Last updated: February 2026 | AIRHOUND Perception Team*

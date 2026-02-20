@@ -46,8 +46,9 @@ RealSense D455 --> RF-DETR Detection --> 3D Kalman Filter --> PX4 Offboard --> D
 | CUDA | 12.6 |
 | TensorRT | 10.3.0 |
 | Camera | Intel RealSense D455 |
-| Flight Controller | Pixhawk 6C (PX4 v1.15+) |
-| Connection | Ethernet (Jetson <-> Pixhawk via MAVLink Router) |
+| Flight Controller | Auterion PX4 FMU v6X.x (`px4_fmu-v6x`) |
+| Baseboard | Auterion (Jetson↔Pixhawk Ethernet, 192.168.0.3/192.168.0.4) |
+| Jetson↔PX4 link | Ethernet via baseboard (uXRCE-DDS port 8888, MAVLink port 14550) |
 
 ### Development/Simulation
 
@@ -102,6 +103,28 @@ cd ..  # Return to AIRHOUND root (launch scripts run from here)
 >
 > **Important:** Always run `colcon build` from the `ws_ros2/` directory, not the repo root.
 > After building, return to the repository root (`cd ..`) — the launch scripts expect to run from `AIRHOUND/`.
+
+---
+
+## HITL Simulation
+
+Hardware-in-the-Loop runs the real PX4 flight stack on the Pixhawk with synthetic sensor data from the Jetson — no motors spin. All communication uses Ethernet via the Auterion baseboard.
+
+```
+Jetson (192.168.0.3) ←── baseboard Ethernet ───→ Pixhawk (192.168.0.4)
+  sends HIL_SENSOR / HIL_GPS                   runs full PX4 flight stack
+  runs uXRCE-DDS Agent (port 8888)             returns HIL_ACTUATOR_CONTROLS
+```
+
+**Quick smoke test** (from Jetson, after full HITL setup):
+
+```bash
+python3 /tmp/hitl_smoke_test.py
+# Expected: OVERALL: PASS - HITL loop confirmed working over Ethernet
+```
+
+See **[docs/HITL_SETUP.md](docs/HITL_SETUP.md)** for the complete setup procedure:
+firmware build, flashing, parameter configuration, and network setup.
 
 ---
 
@@ -334,9 +357,10 @@ AIRHOUND/
 │   ├── airhound.yaml               # Unified configuration
 │   └── realsense_profile.yaml      # Camera profile
 ├── docs/
+│   ├── HITL_SETUP.md               # HITL firmware, Ethernet, and smoke test
+│   ├── FLIGHT_TESTING_GUIDE.md     # Flight procedures
 │   ├── PERCEPTION_INTERFACE.md     # Perception API documentation
 │   ├── PINN_DATA_FORMAT.md         # Trajectory data format for PINN
-│   ├── FLIGHT_TESTING_GUIDE.md     # Flight procedures
 │   ├── DEGRADATION_EVAL_RESULTS.md # Benchmarking results
 │   └── SPIE-Conference-Roadmap.md  # Project timeline
 ├── models/
@@ -394,9 +418,10 @@ See [docs/DEGRADATION_EVAL_RESULTS.md](docs/DEGRADATION_EVAL_RESULTS.md) for com
 
 | Document | Description |
 |----------|-------------|
+| [HITL_SETUP.md](docs/HITL_SETUP.md) | HITL firmware build, flash, Ethernet config, smoke test |
+| [FLIGHT_TESTING_GUIDE.md](docs/FLIGHT_TESTING_GUIDE.md) | Flight procedures and safety |
 | [PERCEPTION_INTERFACE.md](docs/PERCEPTION_INTERFACE.md) | Topic formats, depth integration, code examples |
 | [PINN_DATA_FORMAT.md](docs/PINN_DATA_FORMAT.md) | Trajectory extraction for PINN training |
-| [FLIGHT_TESTING_GUIDE.md](docs/FLIGHT_TESTING_GUIDE.md) | Flight procedures and safety |
 | [DEGRADATION_EVAL_RESULTS.md](docs/DEGRADATION_EVAL_RESULTS.md) | Full benchmarking analysis |
 | [SPIE-Conference-Roadmap.md](docs/SPIE-Conference-Roadmap.md) | Project timeline and milestones |
 
@@ -465,18 +490,34 @@ ls ws_ros2/build/px4_msgs/rosidl_generator_cpp/px4_msgs/msg/ | wc -l
 python3 scripts/validate_camera.py
 
 # Check RealSense streams
-ros2 topic hz /camera/color/image_raw
-ros2 topic hz /camera/depth/image_raw
+# NOTE: realsense2_camera publishes under /camera/camera/ (nested namespace)
+ros2 topic hz /camera/camera/color/image_raw
+ros2 topic hz /camera/camera/depth/image_raw
 
 # If no camera available, use synthetic mode
 ./launch_airhound.sh flight --synthetic
 ```
 
+> **RealSense topic namespace:** The `realsense2_camera` driver publishes under
+> `/camera/camera/` by default (e.g. `/camera/camera/color/image_raw`), not `/camera/`.
+> Scripts that check `/camera/color/image_raw` will show a false negative — verify with
+> `ros2 topic list | grep camera`.
+
 ### Depth values are NaN
 
 1. Verify target is within range (0.4m - 6.0m for D455)
-2. Check depth stream: `ros2 topic hz /camera/depth/image_raw`
+2. Check depth stream: `ros2 topic hz /camera/camera/depth/image_raw`
 3. Increase `depth_window_size` for noisy environments
+
+### PX4 / Ethernet / HITL
+
+| Problem | Solution |
+|---------|----------|
+| `mavlink_shell.py` hangs | `sudo systemctl stop ModemManager` then retry |
+| `NET_IP0 not found` in NSH | fmu-v6x uses `netman` + SD card `net.cfg`, not NET_IP params |
+| Can't ping Pixhawk (192.168.0.4) | Add Jetson route — see [docs/HITL_SETUP.md](docs/HITL_SETUP.md) |
+| No PX4 ROS2 topics | Start DDS agent: `MicroXRCEAgent udp4 -p 8888` on Jetson |
+| HITL loop not active | Confirm `SYS_AUTOSTART=1001`, `MAV_2_CONFIG=1000`, Pixhawk reachable |
 
 ---
 
