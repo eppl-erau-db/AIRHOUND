@@ -131,6 +131,12 @@ tracking:
   max_rate: 1.0              # Maximum yaw rate command (rad/s)
   deadband: 0.01             # Below this threshold, no command sent (rad)
 
+  # Fallback dropout behavior (Strategy 3, when PINN and Kalman are unavailable)
+  # Hold the last commanded yaw for hold_time seconds, then linearly decay to
+  # zero over decay_time seconds.  Keeps commands bounded during dropouts.
+  hold_time: 0.3             # Seconds to hold last yaw command (Chirag fix)
+  decay_time: 1.0            # Seconds to linearly decay to zero after hold
+
   # Target selection (when multiple detections)
   # Currently uses highest confidence detection
 

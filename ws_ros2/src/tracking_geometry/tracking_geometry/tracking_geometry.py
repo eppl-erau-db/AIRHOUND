@@ -45,6 +45,10 @@ class YawErrorNode(Node):
         self.max_rate = self.declare_parameter("max_rate", 1.0).value
         self.deadband = self.declare_parameter("deadband", 0.01).value
 
+        # Fallback dropout behavior: hold last command briefly, then decay to zero
+        self.hold_time = self.declare_parameter("hold_time", 0.3).value   # seconds
+        self.decay_time = self.declare_parameter("decay_time", 1.0).value  # seconds
+
         # Default camera intrinsics (D455 @ 1280x720, ~69 deg HFOV)
         self.default_fx = self.declare_parameter("default_fx", 615.0).value
         self.default_fy = self.declare_parameter("default_fy", 615.0).value
@@ -170,7 +174,8 @@ class YawErrorNode(Node):
         self.pub_tracking_mode = self.create_publisher(
             Float64, "/tracking/mode", qos_default
         )
-        # Mode encoding: 0=no_target, 1=detection, 2=kalman_extrapolation, 3=pinn_prediction
+        # Mode encoding: 0=zero/no_target, 1=detection, 2=kalman_extrapolation,
+        #                3=pinn_prediction, 4=fallback_hold, 5=fallback_decay
 
         self.get_logger().info("YawErrorNode initialized.")
 
@@ -319,14 +324,28 @@ class YawErrorNode(Node):
                 )
                 return
 
-        # Strategy 3: Last-rate extrapolation (always available)
-        yaw_rate = np.clip(self.last_yaw_rate, -self.max_rate, self.max_rate)
+        # Strategy 3: Hold-then-decay fallback (always available).
+        # Hold the last commanded yaw for hold_time seconds, then linearly
+        # decay to zero over decay_time seconds.  Keeps output bounded and
+        # stable during dropouts without letting a stale rate run forever.
+        if dt_since <= self.hold_time:
+            yaw_rate = self.last_yaw_rate
+            mode_val, mode_str = 4.0, "Hold"
+        elif self.decay_time > 0.0 and dt_since <= (self.hold_time + self.decay_time):
+            alpha = 1.0 - (dt_since - self.hold_time) / self.decay_time
+            yaw_rate = alpha * self.last_yaw_rate
+            mode_val, mode_str = 5.0, "Decay"
+        else:
+            yaw_rate = 0.0
+            mode_val, mode_str = 0.0, "Zero"
+
+        yaw_rate = float(np.clip(yaw_rate, -self.max_rate, self.max_rate))
         if abs(yaw_rate) < self.deadband:
             yaw_rate = 0.0
-        self.pub_yaw.publish(Float64(data=float(yaw_rate)))
-        self._publish_mode(0.0)  # fallback mode
+        self.pub_yaw.publish(Float64(data=yaw_rate))
+        self._publish_mode(mode_val)
         self.get_logger().warn(
-            f"[Fallback] dropout {dt_since:.2f}s, yaw_rate={yaw_rate:.4f}"
+            f"[Fallback:{mode_str}] dropout {dt_since:.2f}s, yaw_rate={yaw_rate:.4f}"
         )
 
     def _yaw_from_3d_position(self, position: np.ndarray) -> float:

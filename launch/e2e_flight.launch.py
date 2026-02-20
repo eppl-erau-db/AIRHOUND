@@ -182,6 +182,16 @@ def generate_launch_description():
         default_value='0.01',
         description='Deadband threshold to avoid jitter (rad)'
     )
+    hold_time_arg = DeclareLaunchArgument(
+        'hold_time',
+        default_value='0.3',
+        description='Seconds to hold last yaw command during target dropout'
+    )
+    decay_time_arg = DeclareLaunchArgument(
+        'decay_time',
+        default_value='1.0',
+        description='Seconds to linearly decay yaw to zero after hold period'
+    )
 
     # Kalman / PINN
     enable_kalman_arg = DeclareLaunchArgument(
@@ -352,6 +362,8 @@ def generate_launch_description():
         parameters=[{
             'max_rate': LaunchConfiguration('max_rate'),
             'deadband': LaunchConfiguration('deadband'),
+            'hold_time': LaunchConfiguration('hold_time'),
+            'decay_time': LaunchConfiguration('decay_time'),
             'enable_kalman': LaunchConfiguration('enable_kalman'),
             'kalman_gate_threshold': 3.0,
             'kalman_max_missed': 30,
@@ -496,6 +508,8 @@ def generate_launch_description():
         add_noise_arg,
         max_rate_arg,
         deadband_arg,
+        hold_time_arg,
+        decay_time_arg,
         enable_kalman_arg,
         enable_pinn_arg,
         pinn_model_arg,

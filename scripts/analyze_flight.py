@@ -341,8 +341,9 @@ def analyze_bag(bag_path, output_dir):
         metrics['fps_min'] = round(float(np.min(fps_val)), 1)
 
     # Tracking mode breakdown
+    # Mode encoding: 0=zero/no_target, 1=detection, 2=kalman, 3=pinn, 4=hold, 5=decay
     if len(mode_val) > 0:
-        mode_labels = {0: 'hold', 1: 'detection', 2: 'kalman', 3: 'pinn'}
+        mode_labels = {0: 'zero', 1: 'detection', 2: 'kalman', 3: 'pinn', 4: 'hold', 5: 'decay'}
         for code, label in mode_labels.items():
             pct = np.mean(mode_val == code) * 100
             metrics[f'mode_{label}_pct'] = round(float(pct), 1)
@@ -386,8 +387,8 @@ def analyze_bag(bag_path, output_dir):
     # 3. Tracking mode
     if len(mode_val) > 0:
         fig, ax = plt.subplots(figsize=(10, 2))
-        colors = {0: 'red', 1: 'green', 2: 'orange', 3: 'blue'}
-        labels = {0: 'Hold', 1: 'Detection', 2: 'Kalman', 3: 'PINN'}
+        colors = {0: 'gray', 1: 'green', 2: 'orange', 3: 'blue', 4: 'red', 5: 'salmon'}
+        labels = {0: 'Zero', 1: 'Detection', 2: 'Kalman', 3: 'PINN', 4: 'Hold', 5: 'Decay'}
         for code in sorted(colors.keys()):
             mask = mode_val == code
             if np.any(mask):
@@ -473,7 +474,7 @@ def analyze_bag(bag_path, output_dir):
         f.write(f"  Max  |yaw cmd|: {metrics.get('yaw_cmd_max_deg_s', '?')} deg/s\n\n")
 
         f.write("Tracking Mode Breakdown:\n")
-        for mode in ['detection', 'kalman', 'pinn', 'hold']:
+        for mode in ['detection', 'kalman', 'pinn', 'hold', 'decay', 'zero']:
             f.write(f"  {mode:12s}: {metrics.get(f'mode_{mode}_pct', '?')}%\n")
 
     print(f"  -> flight_summary.txt")
