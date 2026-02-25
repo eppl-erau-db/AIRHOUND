@@ -11,8 +11,9 @@
 
 \documentclass[11pt,letterpaper]{article}
 
-% --- Page layout (approximate SPIE format) ---
-\usepackage[margin=1in]{geometry}
+% --- Page layout (SPIE letter-size format) ---
+\usepackage[left=0.88in, right=0.88in, top=1.0in, bottom=1.25in]{geometry}
+\pagenumbering{gobble} % SPIE: no page numbers
 
 % --- Fonts ---
 \usepackage{times}
@@ -56,10 +57,7 @@
 
 \title{Predictive Target Pursuit for Autonomous UAVs using RF-DETR with Depth-Aware State Estimation and Physics-Informed Trajectory Prediction}
 
-\author{
-    % Author list TBD - add all team members
-    % Embry-Riddle Aeronautical University, Daytona Beach, FL
-}
+\author{}
 
 \date{}
 \maketitle
@@ -68,6 +66,8 @@
 \begin{abstract}
 Autonomous UAV target pursuit requires robust detection, state estimation, and control under conditions where visual input degrades or disappears entirely. We present AIRHOUND, an onboard perception-to-control pipeline for single-target drone tracking that runs entirely on an NVIDIA Jetson Orin. The system integrates two detection architectures---RF-DETR (transformer-based) and YOLOv8n (CNN-based)---with Intel RealSense D455 stereo depth for 3D state estimation, a 6-state Kalman filter for temporal smoothing, and a physics-informed neural network (PINN) for trajectory prediction during detection dropout. We evaluate both detectors under four synthetic degradation types (Gaussian noise, low light, motion blur, partial occlusion) at five severity levels. RF-DETR retains 75\% of its clean-baseline mAP at maximum noise severity, compared to 33\% for YOLOv8n, a +39.8 percentage point advantage attributable to the transformer attention mechanism's ability to aggregate global context from uncorrupted image regions. Both architectures run above 25~FPS on the Jetson Orin after TensorRT FP16 conversion. The PINN enforces a velocity magnitude constraint ($\|\mathbf{v}\| \leq 10$~m/s) during training, preventing physically implausible extrapolation during multi-second dropouts. The complete pipeline is validated in PX4 software-in-the-loop simulation with closed-loop yaw tracking, and hardware flight testing with real-time detection is in progress. All perception and tracking components are modular, configurable at runtime via a single YAML file, and communicate over standard ROS~2 interfaces.
 \end{abstract}
+
+\noindent\textbf{Keywords:} UAV target tracking, transformer object detection, physics-informed neural network, depth estimation, Kalman filter, ROS~2, edge computing, degradation robustness
 
 % ============================================================================
 \section{Introduction}
@@ -149,7 +149,7 @@ The pipeline consists of five primary nodes:
 
     \item \textbf{Tracking Node} (\texttt{yaw\_error\_node}): Subscribes to \texttt{/detections}, computes horizontal pixel offset from image center, converts to angular error using camera intrinsics, and publishes yaw rate commands on \texttt{/yaw\_command}. Includes a proportional controller with configurable deadband and rate limits. When detections are absent, the node applies last-rate extrapolation as a short-term prediction.
 
-    \item \textbf{3D Kalman Filter}: A 6-state constant-velocity filter with state vector $\mathbf{x} = [x, y, z, v_x, v_y, v_z]^\top$. The filter uses a standard predict-update cycle with a discrete white noise acceleration process model. Mahalanobis gating rejects outlier measurements (threshold: $\chi^2_{3,0.997} \approx 3.0$), and the filter resets after 30 consecutive missed detections ($\sim$1~s at 30~Hz).
+    \item \textbf{3D Kalman Filter}: A 6-state constant-velocity filter with state vector $\mathbf{x} = [x, y, z, v_x, v_y, v_z]^\top$. The filter uses a standard predict-update cycle with a discrete white noise acceleration process model. Mahalanobis gating rejects outlier measurements ($d_M > 3.0$, corresponding to $\approx$97\% confidence for 3~DOF), and the filter resets after 30 consecutive missed detections ($\sim$1~s at 30~Hz).
 
     \item \textbf{Control Node} (\texttt{yaw\_controller\_node}): A C++ node that subscribes to \texttt{/yaw\_command}, constructs PX4 \texttt{TrajectorySetpoint} messages, and streams them at 10~Hz to maintain offboard mode. The current implementation controls yaw only; altitude and pitch viewing extensions are staged for Weeks~5--8 of the development timeline.
 \end{enumerate}
@@ -329,7 +329,7 @@ Outlier measurements are rejected using a Mahalanobis distance gate:
 \begin{equation}
     d_M = \sqrt{(\mathbf{z}_k - \mathbf{H}\hat{\mathbf{x}}_{k|k-1})^\top \mathbf{S}_k^{-1} (\mathbf{z}_k - \mathbf{H}\hat{\mathbf{x}}_{k|k-1})}
 \end{equation}
-where $\mathbf{S}_k = \mathbf{H} \mathbf{P}_{k|k-1} \mathbf{H}^\top + \mathbf{R}$ is the innovation covariance. Measurements with $d_M > 3.0$ are rejected ($\sim$99.7\% confidence for 3~DOF). After 30 consecutive rejected or missing measurements ($\sim$1~s at 30~Hz), the filter resets and reinitializes on the next valid detection.
+where $\mathbf{S}_k = \mathbf{H} \mathbf{P}_{k|k-1} \mathbf{H}^\top + \mathbf{R}$ is the innovation covariance. Measurements with $d_M > 3.0$ are rejected, corresponding to $d_M^2 > 9.0$; for a $\chi^2$ distribution with 3~degrees of freedom, this yields an approximately 97\% confidence boundary. After 30 consecutive rejected or missing measurements ($\sim$1~s at 30~Hz), the filter resets and reinitializes on the next valid detection.
 
 \subsection{Depth Quality Monitoring}
 \label{sec:depth_quality}
@@ -519,6 +519,11 @@ The automated analysis script computes the following from each recorded bag:
 
 For hardware flights, additional metrics include PINN vs.\ Kalman prediction accuracy (angular error at dropout recovery), depth estimation error relative to known target range, and end-to-end latency from frame capture to setpoint publication.
 
+\subsection{Use of AI-Assisted Tools}
+\label{sec:ai_tools}
+
+AI-assisted code completion tools (GitHub Copilot) were used during software development to accelerate boilerplate ROS~2 node scaffolding and Python utility functions. An LLM assistant (Anthropic Claude) was used for language editing and manuscript formatting. All technical content, experimental design, algorithmic architecture, mathematical derivations, and data analysis are the authors' own work. All AI-generated code was reviewed, tested, and validated by the authors before integration.
+
 % ============================================================================
 \section{Results}
 \label{sec:results}
@@ -573,9 +578,7 @@ Current work focuses on hardware flight validation using the Jetson Orin with a 
 
 % ============================================================================
 \section*{Acknowledgments}
-% Faculty advisor: Dr. Drakunov
-% EPPL Lab, Embry-Riddle Aeronautical University
-% SPIE Student Conference Support (if awarded)
+This work was conducted at the Engineering Physics Propulsion Lab (EPPL), Embry-Riddle Aeronautical University, under the direction of Dr.\ Sergey Drakunov.
 
 % ============================================================================
 \bibliographystyle{unsrtnat}

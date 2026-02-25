@@ -216,32 +216,7 @@ def main():
              'PX4 Autopilot', 'Offboard via uXRCE-DDS',
              COLORS['px4'], bold=True)
 
-    # === Jetson Orin box (encompassing processing nodes) ===
-    jetson_box = FancyBboxPatch(
-        (1.2, 2.1), 9.0, 3.5,
-        boxstyle="round,pad=0.12",
-        facecolor='none',
-        edgecolor='#888888',
-        linewidth=1.5,
-        linestyle='--',
-        zorder=0,
-    )
-    ax.add_patch(jetson_box)
-    ax.text(
-        10.0, 5.45,
-        'NVIDIA Jetson Orin 16 GB',
-        ha='right', va='center',
-        fontsize=8, color='#888888',
-        fontstyle='italic',
-    )
-
-    # === ROS2 label ===
-    ax.text(
-        1.4, 2.15,
-        'ROS 2 Humble',
-        ha='left', va='bottom',
-        fontsize=7, color='#888888',
-    )
+    # (Jetson Orin / ROS 2 Humble labels removed for readability)
 
     # === Kalman → Control direct path (fallback when PINN is bypassed) ===
     ax.annotate('', xy=(ctrl_x + 0.3, ctrl_y + bh), xytext=(kf_x + bw / 2, kf_y - 0.05),
