@@ -121,43 +121,18 @@ Most UAV tracking systems treat detection and control as independent modules wit
 \section{System Architecture}
 \label{sec:architecture}
 
-The AIRHOUND system integrates perception, state estimation, trajectory prediction, and flight control into a real-time pipeline for autonomous UAV target pursuit. Figure~\ref{fig:architecture} shows the complete data flow. All processing runs onboard an NVIDIA Jetson Orin (16~GB) with ROS~2 Humble~\cite{ros2humble,ros2design} as the communication middleware.
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{system_architecture.pdf}
-    \caption{AIRHOUND system architecture. The Intel RealSense D455 provides synchronized RGB and depth streams. The detection node (RF-DETR or YOLOv8, selectable via configuration) publishes 2D bounding boxes that are fused with depth to produce 3D position estimates. A 6-state Kalman filter produces smoothed position and velocity, which feeds a PINN for trajectory prediction during detection dropout. The control node commands yaw, pitch viewing angle, and altitude via PX4 offboard mode. A dashed arrow indicates the Kalman-only fallback path when PINN prediction is unavailable.}
-    \label{fig:architecture}
-\end{figure}
-
-\subsection{Hardware Platform}
-\label{sec:hardware}
-
-The UAV platform is a custom quadrotor running PX4~\cite{px4docs} firmware with an NVIDIA Jetson Orin (16~GB) as the companion computer. An Intel RealSense D455~\cite{realsensed455} stereo depth camera provides synchronized RGB ($1280 \times 720$, 30~Hz) and depth ($1280 \times 720$, 30~Hz) streams. The D455's active infrared stereo provides depth measurements in the 0.4--6.0~m range with approximately 1--2\% depth error relative to distance.
-
-Communication between ROS~2 and PX4 is handled by the Micro~XRCE-DDS bridge~\cite{eprosimadds}, which translates between DDS topics and PX4's internal uORB messaging. The bridge runs over UDP on port 8888, enabling the ROS~2 nodes to publish \texttt{TrajectorySetpoint} messages and receive vehicle state at 10~Hz.
-
-\subsection{ROS~2 Pipeline}
-\label{sec:ros2_pipeline}
-
-The pipeline consists of five primary nodes:
-
-\begin{enumerate}
-    \item \textbf{Detection Node} (\texttt{perception\_node}): Subscribes to \texttt{/camera/color/image\_raw}, runs inference through either the RF-DETR or YOLOv8 TensorRT engine (selected via \texttt{airhound.yaml}), and publishes \texttt{Detection2DArray} messages on \texttt{/detections}. When depth integration is enabled, the node also subscribes to \texttt{/camera/depth/image\_raw}, extracts depth at each bounding box center using a $5 \times 5$ median filter for noise robustness, and embeds the depth value in each detection's pose field.
-
-    \item \textbf{Depth Fusion}: Integrated within the detection node. For each detection, the 2D bounding box center $(u, v)$ and depth $Z$ are projected to 3D camera-frame coordinates using the pinhole camera model: $X = (u - c_x) Z / f_x$, $Y = (v - c_y) Z / f_y$. The highest-confidence detection's 3D position is published on \texttt{/perception/target\_3d} as a \texttt{PointStamped} message.
-
-    \item \textbf{Tracking Node} (\texttt{yaw\_error\_node}): Subscribes to \texttt{/detections}, computes horizontal pixel offset from image center, converts to angular error using camera intrinsics, and publishes yaw rate commands on \texttt{/yaw\_command}. Includes a proportional controller with configurable deadband and rate limits. When detections are absent, the node applies last-rate extrapolation as a short-term prediction.
-
-    \item \textbf{3D Kalman Filter}: A 6-state constant-velocity filter with state vector $\mathbf{x} = [x, y, z, v_x, v_y, v_z]^\top$. The filter uses a standard predict-update cycle with a discrete white noise acceleration process model. Mahalanobis gating rejects outlier measurements ($d_M > 3.0$, corresponding to $\approx$97\% confidence for 3~DOF), and the filter resets after 30 consecutive missed detections ($\sim$1~s at 30~Hz).
-
-    \item \textbf{Control Node} (\texttt{yaw\_controller\_node}): A C++ node that subscribes to \texttt{/yaw\_command}, constructs PX4 \texttt{TrajectorySetpoint} messages, and streams them at 10~Hz to maintain offboard mode. The current implementation controls yaw only; altitude and pitch viewing extensions are staged for Weeks~5--8 of the development timeline.
-\end{enumerate}
-
-\subsection{Model Selection via Configuration}
-\label{sec:model_config}
-
-A central configuration file (\texttt{airhound.yaml}) controls detector selection (\texttt{detector\_type}: \texttt{"rfdetr"} or \texttt{"yolo"}), model path, confidence threshold, depth integration parameters, and PX4 control settings. This enables rapid switching between models during comparative flight testing without code changes, ensuring identical test conditions for both detectors.
+% TODO [Middleware + QA]: Write this section.
+%
+% Owner: Middleware + QA (per CONTRIBUTING.md)
+% Contributors: Perception, Tracking, Controls
+%
+% What to cover:
+%   - Hardware platform (UAV, Jetson Orin, D455, PX4)
+%   - ROS 2 node graph and topic interfaces
+%   - System architecture figure (Figure 1)
+%   - Configuration/model selection via airhound.yaml
+%
+% See CONTRIBUTING.md for LaTeX tips, figure inclusion, and git workflow.
 
 % ============================================================================
 \section{RF-DETR Detection and Degradation Robustness}
@@ -268,285 +243,89 @@ These results inform two key architectural decisions:
 \section{Depth Integration and 3D State Estimation}
 \label{sec:depth}
 
-Monocular object detection alone provides only 2D image-plane localization. To enable 3D control (altitude hold, pitch viewing), the system fuses 2D detections with stereo depth from the RealSense D455.
-
-\subsection{Depth Extraction and Filtering}
-\label{sec:depth_extraction}
-
-For each detection bounding box, the system extracts depth at the box center pixel $(u_c, v_c)$. To mitigate stereo matching noise---particularly at object edges and at ranges beyond 3~m---a $5 \times 5$ median filter is applied over a window centered on $(u_c, v_c)$. Only depth values within the D455's reliable operating range (0.4--6.0~m) are accepted; values outside this range are flagged as invalid and downstream consumers receive \texttt{NaN}.
-
-The D455 publishes 16-bit unsigned depth images in millimeters. A configurable scale factor ($\alpha = 0.001$) converts to meters:
-\begin{equation}
-    Z = \alpha \cdot \text{median}\left(\mathbf{D}[v_c \pm 2, u_c \pm 2]\right)
-    \label{eq:depth}
-\end{equation}
-where $\mathbf{D}$ is the depth image and the window excludes zero-valued (invalid) pixels before computing the median.
-
-\subsection{3D Projection}
-\label{sec:projection}
-
-Given a valid depth $Z$ and camera intrinsics $(f_x, f_y, c_x, c_y)$ from the \texttt{CameraInfo} topic, the 3D position in the camera optical frame is computed using the pinhole model:
-\begin{equation}
-    X = \frac{(u_c - c_x) \cdot Z}{f_x}, \quad
-    Y = \frac{(v_c - c_y) \cdot Z}{f_y}, \quad
-    Z = Z
-    \label{eq:projection}
-\end{equation}
-The resulting $(X, Y, Z)$ is published as a \texttt{PointStamped} message on \texttt{/perception/target\_3d} in the \texttt{camera\_color\_optical\_frame} coordinate frame, where $+X$ is right, $+Y$ is down, and $+Z$ is forward (into the scene).
-
-\subsection{3D Kalman Filter}
-\label{sec:kalman}
-
-A 6-state constant-velocity Kalman filter~\cite{kalmanfilter1960} estimates the target's 3D position and velocity from noisy depth-fused measurements. The state vector is:
-\begin{equation}
-    \mathbf{x} = [x, y, z, v_x, v_y, v_z]^\top
-\end{equation}
-
-\subsubsection{Motion Model}
-
-The state transition follows a constant-velocity assumption:
-\begin{equation}
-    \mathbf{x}_{k+1} = \mathbf{F}(\Delta t) \, \mathbf{x}_k + \mathbf{w}_k, \quad
-    \mathbf{F} = \begin{bmatrix}
-        \mathbf{I}_3 & \Delta t \, \mathbf{I}_3 \\
-        \mathbf{0}_3 & \mathbf{I}_3
-    \end{bmatrix}
-\end{equation}
-where $\Delta t$ is the inter-frame interval and $\mathbf{w}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{Q})$ is the process noise. The process noise covariance uses a diagonal model with separate position and velocity noise terms, tuned based on expected target maneuverability.
-
-\subsubsection{Measurement Model}
-
-The measurement vector $\mathbf{z}_k = [x, y, z]^\top$ is the 3D position from depth fusion. The observation matrix $\mathbf{H} = [\mathbf{I}_3 \;\; \mathbf{0}_3]$ selects the position components. The measurement noise covariance $\mathbf{R}$ is set based on D455 depth accuracy characteristics: approximately $\sigma_z \approx 0.01 Z$ for the depth axis and $\sigma_{x,y} \approx Z / f$ for the lateral axes, where $f$ is the focal length in pixels.
-
-\subsubsection{Update and Gating}
-
-The filter uses the Joseph-form covariance update for numerical stability:
-\begin{equation}
-    \mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}_k \mathbf{H}) \, \mathbf{P}_{k|k-1} \, (\mathbf{I} - \mathbf{K}_k \mathbf{H})^\top + \mathbf{K}_k \mathbf{R} \mathbf{K}_k^\top
-\end{equation}
-
-Outlier measurements are rejected using a Mahalanobis distance gate:
-\begin{equation}
-    d_M = \sqrt{(\mathbf{z}_k - \mathbf{H}\hat{\mathbf{x}}_{k|k-1})^\top \mathbf{S}_k^{-1} (\mathbf{z}_k - \mathbf{H}\hat{\mathbf{x}}_{k|k-1})}
-\end{equation}
-where $\mathbf{S}_k = \mathbf{H} \mathbf{P}_{k|k-1} \mathbf{H}^\top + \mathbf{R}$ is the innovation covariance. Measurements with $d_M > 3.0$ are rejected, corresponding to $d_M^2 > 9.0$; for a $\chi^2$ distribution with 3~degrees of freedom, this yields an approximately 97\% confidence boundary. After 30 consecutive rejected or missing measurements ($\sim$1~s at 30~Hz), the filter resets and reinitializes on the next valid detection.
-
-\subsection{Depth Quality Monitoring}
-\label{sec:depth_quality}
-
-The perception node publishes real-time depth quality metrics: a binary availability flag on \texttt{/perception/depth\_available} and a per-frame quality ratio (valid depths / total detections) on \texttt{/perception/depth\_quality}. These enable downstream nodes to adapt behavior when depth is unreliable---for example, falling back to 2D-only tracking when depth quality drops below a configurable threshold.
+% TODO [Tracking team]: Write this section.
+%
+% Owner: Tracking team (per CONTRIBUTING.md)
+% Contributors: Perception
+%
+% What to cover:
+%   - Depth extraction from D455 (median filter, valid range)
+%   - 3D projection via pinhole model
+%   - 6-state Kalman filter (state vector, motion model, measurement model)
+%   - Mahalanobis gating and filter reset
+%   - Depth quality monitoring topics
+%
+% See CONTRIBUTING.md for LaTeX tips and git workflow.
 
 % ============================================================================
 \section{Physics-Informed Trajectory Prediction}
 \label{sec:pinn}
 
-During detection dropout---caused by severe motion blur, occlusion, or brief sensor failures---the system must maintain target state estimates to avoid losing track. The constant-velocity Kalman filter (Section~\ref{sec:kalman}) provides short-term extrapolation, but its linear motion assumption produces increasing error over multi-second dropout intervals, particularly when the target is maneuvering. To improve prediction during extended dropouts, we integrate a physics-informed neural network (PINN)~\cite{raissi2019pinn} that learns nonlinear trajectory dynamics while enforcing physical feasibility constraints.
-
-\subsection{Network Architecture}
-\label{sec:pinn_architecture}
-
-The trajectory PINN is a fully connected feedforward network with 3 hidden layers of 128 units each and ReLU activations. The input is a 7-dimensional vector consisting of the current Kalman state estimate $[x, y, z, v_x, v_y, v_z]$ concatenated with the prediction horizon $\Delta t$ in seconds. The output is the predicted 6-dimensional state $[\hat{x}', \hat{y}', \hat{z}', \hat{v}_x', \hat{v}_y', \hat{v}_z']$ at time $t + \Delta t$.
-
-All inputs and outputs are standardized using per-feature mean and standard deviation computed from the training set. The normalization statistics are stored alongside the model weights and applied at inference time.
-
-\subsection{Physics-Informed Loss}
-\label{sec:pinn_loss}
-
-The training loss combines a standard data-fitting term with a physics constraint term:
-\begin{equation}
-    \mathcal{L} = \mathcal{L}_{\text{data}} + \lambda_{\text{phys}} \, \mathcal{L}_{\text{phys}}
-    \label{eq:pinn_loss}
-\end{equation}
-where $\mathcal{L}_{\text{data}}$ is the mean squared error between predicted and ground-truth future states, and $\mathcal{L}_{\text{phys}}$ penalizes physically infeasible predictions.
-
-The physics loss enforces a velocity magnitude constraint:
-\begin{equation}
-    \mathcal{L}_{\text{phys}} = \frac{1}{N} \sum_{i=1}^{N} \max\left(0, \; \|\hat{\mathbf{v}}_i\| - v_{\max}\right)^2
-    \label{eq:phys_loss}
-\end{equation}
-where $v_{\max} = 10$~m/s is the maximum physically plausible target speed and $\hat{\mathbf{v}}_i$ is the predicted velocity vector for sample $i$. The weighting factor is set to $\lambda_{\text{phys}} = 0.1$. This soft constraint prevents the network from predicting unrealistic velocities during extrapolation, which is particularly important during extended dropout intervals when the network iteratively feeds its own predictions back as input.
-
-\subsection{Training}
-\label{sec:pinn_training}
-
-Training data is generated from PX4 SITL trajectories using scripted target motion scenarios (circular, sinusoidal, figure-eight, and 3D patterns). Each trajectory is recorded as a ROS~2 rosbag containing timestamped 3D position and velocity from the Kalman filter. Sliding windows of $(state_t, \Delta t, state_{t+\Delta t})$ tuples are extracted for supervision.
-
-The network is trained for 50 epochs with the Adam optimizer. The best model is selected by validation loss, achieving a final validation MSE of 0.069. Both PyTorch (\texttt{.pth}) and ONNX (\texttt{.onnx}) model formats are exported for deployment flexibility.
-
-\subsection{Deployment and Dropout Recovery}
-\label{sec:pinn_deployment}
-
-The PINN runs as a standalone ROS~2 node (\texttt{pinn\_prediction\_node}) that subscribes to the Kalman filter state on \texttt{/tracking/kalman\_state} and monitors detection availability via \texttt{/perception/target\_3d}. When no detection is received for a configurable timeout period (default: 0.1~s), the node activates and begins publishing predicted states on \texttt{/tracking/pinn\_predicted} at 30~Hz.
-
-During active prediction, the PINN operates iteratively: each predicted state becomes the input for the next prediction step, producing a trajectory forecast that extends until either (a)~a new detection is received, (b)~the maximum prediction duration is exceeded (default: 2.0~s), or (c)~the predicted velocity violates the physical constraint bound.
-
-The tracking node consumes PINN predictions during dropout to compute yaw commands, replacing the Kalman filter's linear extrapolation. This component is modular: it is enabled or disabled via the \texttt{airhound.yaml} configuration file. When disabled, the system falls back to Kalman-only extrapolation. Comparative evaluation of PINN vs.\ Kalman-only dropout recovery is planned for hardware flight testing (Section~\ref{sec:flight_testing}).
-
-The PINN node supports both PyTorch and ONNX Runtime inference backends. For Jetson deployment, the ONNX backend enables integration with TensorRT optimization, sharing the GPU inference pipeline with the detection model.
+% TODO [Tracking team]: Write this section.
+%
+% Owner: Tracking team (per CONTRIBUTING.md)
+%
+% What to cover:
+%   - PINN architecture (MLP, input/output dimensions)
+%   - Physics-informed loss (velocity constraint, lambda weighting)
+%   - Training data (SITL trajectories, data format)
+%   - Deployment as ROS 2 node, dropout recovery behavior
+%   - ONNX/PyTorch inference backends
+%
+% See CONTRIBUTING.md for LaTeX tips and git workflow.
 
 % ============================================================================
-\section{Yaw Tracking Control}
+\section{Anticipatory Control}
 \label{sec:control}
 
-The current control implementation focuses on yaw-axis tracking as the foundational control mode. The UAV maintains a fixed hover position while rotating to keep the detected target centered in the camera's field of view. Pitch viewing angle and altitude adjustments are planned extensions (Section~\ref{sec:conclusion}).
-
-\subsection{Control Architecture}
-\label{sec:control_architecture}
-
-The control pipeline consists of two nodes operating in sequence:
-
-\begin{enumerate}
-    \item \textbf{Tracking Node} (\texttt{yaw\_error\_node}): Computes the angular error between the detected target and image center using the camera's horizontal focal length $f_x$:
-    \begin{equation}
-        e_{\text{yaw}} = \frac{u_{\text{target}} - c_x}{f_x}
-        \label{eq:yaw_error}
-    \end{equation}
-    where $u_{\text{target}}$ is the horizontal pixel coordinate of the highest-confidence detection and $c_x$ is the principal point. The error (in radians) is clipped to $\pm 1.0$~rad/s and passed through a deadband of 0.01~rad to suppress jitter. During detection dropout, the node substitutes Kalman extrapolation or PINN predictions as described in Section~\ref{sec:pinn_deployment}.
-
-    \item \textbf{PX4 Converter Node} (\texttt{px4\_converter\_gazebo}): A C++ node that subscribes to \texttt{/yaw\_command}, applies a proportional gain (3$\times$) with a $\pm$2~rad/s rate clamp, and constructs PX4 \texttt{TrajectorySetpoint} messages with the commanded yaw rate (\texttt{yawspeed} field) and a fixed hover position. The node streams setpoints at 10~Hz to maintain offboard mode and handles the PX4 arming sequence unconditionally. A configurable \texttt{force\_arm} parameter bypasses pre-flight checks for SITL and HITL testing; this is disabled for hardware flights. A safety timeout ceases control output after 5~s without a yaw command.
-\end{enumerate}
-
-\subsection{Dropout Recovery Modes}
-\label{sec:dropout_modes}
-
-The tracking node implements a configurable fallback hierarchy for detection dropout:
-
-\begin{enumerate}
-    \item \textbf{PINN prediction} (if enabled): Uses the physics-informed network's predicted 3D target position to compute yaw error via $\arctan(X / Z)$ in the camera optical frame.
-    \item \textbf{Kalman extrapolation} (if enabled): Uses the Kalman filter's constant-velocity position estimate for the same yaw computation.
-    \item \textbf{Last-rate hold}: Maintains the most recent yaw rate command as a zero-order hold.
-\end{enumerate}
-
-Each mode activates only when the higher-priority source is unavailable or disabled. The active mode is published on \texttt{/tracking/mode} (encoded as 0--3) for monitoring and post-flight analysis.
+% TODO [Controls]: Write this section.
+%
+% Owner: Controls (per CONTRIBUTING.md)
+% Contributors: Tracking team
+%
+% What to cover:
+%   - Yaw control architecture (yaw_error_node, px4_converter)
+%   - Dropout recovery fallback hierarchy (PINN -> Kalman -> hold)
+%   - Altitude control (Stage 1, Z velocity setpoint) -- if validated
+%   - Pitch viewing (Stage 2) -- if validated
+%   - Safety limits and PID tuning
+%
+% See CONTRIBUTING.md for LaTeX tips and git workflow.
 
 % ============================================================================
 \section{Experimental Setup}
 \label{sec:experiments}
 
-Evaluation proceeds in two stages: software-in-the-loop (SITL) simulation for system integration validation, followed by hardware flight testing for real-world performance characterization.
-
-\subsection{SITL Validation}
-\label{sec:sitl}
-
-SITL testing uses PX4's Gazebo~\cite{gazebo2004} integration with a simulated X500 quadrotor. A mock detector generates synthetic detection sequences with configurable target motion patterns (circular, sinusoidal, figure-eight, and static), publish rate, bounding box size, and optional Gaussian noise. This enables end-to-end pipeline testing---from detection through Kalman filtering, prediction, and control---without requiring camera hardware.
-
-The SITL environment serves three purposes:
-\begin{enumerate}
-    \item \textbf{Integration testing}: Verifying that all ROS~2 nodes communicate correctly, PX4 enters and maintains offboard mode, and the control loop is stable.
-    \item \textbf{PINN training data}: Scripted target motion scenarios (10+, including vertical motion for altitude control validation) generate rosbag recordings of 3D position trajectories used to train the PINN (Section~\ref{sec:pinn}).
-    \item \textbf{Control tuning}: Initial PID parameter tuning for yaw, pitch, and altitude axes before transferring to hardware.
-\end{enumerate}
-
-\subsubsection{Closed-Loop SITL Results}
-\label{sec:sitl_results}
-
-To validate the full detection-to-control cascade, we ran a 97.3~s closed-loop SITL session with the Gazebo Baylands environment and PX4's X500 model. The mock detector placed a single target at 15~m distance undergoing sinusoidal lateral motion (amplitude 12~m, speed 1.0~m/s). The target's 3D position was projected through a pinhole camera model using the drone's ground-truth attitude from PX4, producing both 2D detections on \texttt{/detections} and 3D positions on \texttt{/perception/target\_3d} at 30~Hz. Forced detection dropouts of 0.5~s were injected every 3.0~s to exercise the prediction pipeline.
-
-Table~\ref{tab:sitl_cascade} summarizes the tracking mode distribution. When detections were available, the tracking node used direct pixel-to-yaw conversion (mode~1). During the first 0.1~s of each dropout, the Kalman filter's constant-velocity extrapolation provided yaw commands (mode~2). After 0.1~s, the PINN node activated and its predicted 3D positions drove the yaw computation (mode~3). The last-rate hold fallback (mode~0) engaged for less than 1\% of the session duration, occurring only during transient edge cases at dropout boundaries.
-
-\begin{table}[htbp]
-    \centering
-    \caption{Tracking mode distribution during 97.3~s closed-loop SITL run with 0.5~s forced dropouts every 3.0~s. PINN uses the ONNX backend on CPU.}
-    \label{tab:sitl_cascade}
-    \begin{tabular}{llr}
-        \toprule
-        \textbf{Mode} & \textbf{Source} & \textbf{Time (\%)} \\
-        \midrule
-        1 -- Detection  & Direct pixel-to-yaw      & 18.8 \\
-        2 -- Kalman     & Constant-velocity extrap. & 24.3 \\
-        3 -- PINN       & Physics-informed pred.    & 56.5 \\
-        0 -- Hold       & Last-rate fallback        & 0.5 \\
-        \bottomrule
-    \end{tabular}
-\end{table}
-
-The mean absolute yaw command during this session was 20.95~deg/s (max 57.3~deg/s), and the system executed 25 dropout-recovery cycles with a maximum single dropout duration of 4.4~s. The drone maintained stable yaw tracking throughout, with the yaw heading following the target bearing within approximately 5--8 degrees during detection-available intervals.
-
-All session data was recorded to a ROS~2 rosbag (MCAP format, zstd compression) and post-processed using an automated analysis script that produces per-flight PDF plots and a CSV metrics summary. This same pipeline is used for hardware flight analysis (Section~\ref{sec:data_collection}).
-
-\subsection{Hardware Flight Testing}
-\label{sec:flight_testing}
-
-Hardware flights are conducted in an indoor flight cage at Embry-Riddle Aeronautical University using a static or hand-held target. The flight test matrix evaluates both detectors under controlled scenarios:
-
-\begin{table}[htbp]
-    \centering
-    \caption{Flight test matrix. Each scenario is tested with both YOLOv8 and RF-DETR detectors.}
-    \label{tab:flight_matrix}
-    \begin{tabular}{lll}
-        \toprule
-        \textbf{Scenario} & \textbf{Motion Type} & \textbf{Primary Test} \\
-        \midrule
-        Steady hover     & Static target         & Baseline stability \\
-        Slow linear      & Horizontal, $<$1 m/s  & Yaw tracking \\
-        Moderate speed   & Horizontal, 1--2 m/s  & Yaw tracking \\
-        Vertical motion  & Up/down               & Pitch viewing \\
-        Approach/retreat & Toward/away            & Altitude control \\
-        Diagonal 3D      & Combined axes          & Full 3D control \\
-        Natural occlusion & Partial obstruction   & Dropout recovery \\
-        Varying distance  & 1--5 m range          & Depth accuracy \\
-        \bottomrule
-    \end{tabular}
-\end{table}
-
-\subsection{Data Collection}
-\label{sec:data_collection}
-
-Each flight records a ROS~2 rosbag in MCAP format with zstd file-level compression. The recording node subscribes to 21 topics spanning perception, tracking, and PX4 telemetry:
-\begin{itemize}
-    \item \textbf{Perception}: \texttt{/detections}, \texttt{/perception/target\_3d}, \texttt{/perception/fps}, \texttt{/perception/latency\_ms}, \texttt{/perception/depth\_available}, \texttt{/perception/depth\_quality}
-    \item \textbf{Tracking}: \texttt{/yaw\_command}, \texttt{/tracking/mode}, \texttt{/tracking/kalman\_state}
-    \item \textbf{PINN}: \texttt{/tracking/pinn\_predicted}, \texttt{/tracking/pinn\_state}, \texttt{/tracking/pinn\_active}
-    \item \textbf{PX4 commands}: \texttt{/fmu/in/trajectory\_setpoint}, \texttt{/fmu/in/offboard\_control\_mode}, \texttt{/fmu/in/vehicle\_command}
-    \item \textbf{PX4 ground truth}: \texttt{/fmu/out/vehicle\_attitude}, \texttt{/fmu/out/vehicle\_local\_position\_v1}
-    \item \textbf{Metadata}: \texttt{/camera/camera\_info}, \texttt{/px4\_converter\_status}
-\end{itemize}
-
-PX4 topics use BEST\_EFFORT/VOLATILE QoS (matching the XRCE-DDS bridge), which requires explicit QoS overrides in the recorder configuration; the default RELIABLE policy silently drops all PX4 messages. Camera images are recorded to a parallel bag when enabled (\texttt{record\_images:=true}) to keep the primary bag compact.
-
-Recording is enabled by default for flight launches and disabled by default for simulation. An automated post-flight analysis script reads the MCAP bag using a streaming reader (handling truncated files from ungraceful shutdowns), deserializes CDR-encoded messages, and produces four PDF plots (detection timeline, tracking mode breakdown, yaw ground truth, yaw tracking error) along with a CSV metrics summary and text flight report.
-
-\subsection{Evaluation Metrics}
-\label{sec:metrics}
-
-The automated analysis script computes the following from each recorded bag:
-\begin{itemize}
-    \item \textbf{Detection}: Detection availability rate (\% of frames with at least one detection), inference FPS, and per-frame latency (when reported by the perception node).
-    \item \textbf{Dropout characterization}: Number of dropout events, mean and maximum dropout duration, and total time in dropout.
-    \item \textbf{Tracking mode distribution}: Percentage of time in each mode (detection, Kalman, PINN, hold), derived from the \texttt{/tracking/mode} topic.
-    \item \textbf{Control}: Mean and maximum absolute yaw command rate (deg/s), computed from \texttt{/yaw\_command}. Yaw tracking error is computed against PX4 ground-truth attitude from \texttt{/fmu/out/vehicle\_attitude} when available.
-\end{itemize}
-
-For hardware flights, additional metrics include PINN vs.\ Kalman prediction accuracy (angular error at dropout recovery), depth estimation error relative to known target range, and end-to-end latency from frame capture to setpoint publication.
-
-\subsection{Use of AI-Assisted Tools}
-\label{sec:ai_tools}
-
-AI-assisted code completion tools (GitHub Copilot) were used during software development to accelerate boilerplate ROS~2 node scaffolding and Python utility functions. An LLM assistant (Anthropic Claude) was used for language editing and manuscript formatting. All technical content, experimental design, algorithmic architecture, mathematical derivations, and data analysis are the authors' own work. All AI-generated code was reviewed, tested, and validated by the authors before integration.
+% TODO [Flight Ops + Middleware + QA]: Write this section.
+%
+% Owner: Flight Ops (per CONTRIBUTING.md)
+% Contributors: Middleware + QA
+%
+% What to cover:
+%   - SITL environment (PX4 Gazebo, X500 model, mock detector)
+%   - Hardware flight test setup (flight cage, target, safety protocols)
+%   - Flight test matrix (scenarios, both detectors)
+%   - Data collection (rosbag topics, MCAP format, analysis pipeline)
+%   - Evaluation metrics
+%   - AI tools disclosure (GitHub Copilot, Claude for editing)
+%
+% See CONTRIBUTING.md for LaTeX tips and git workflow.
 
 % ============================================================================
 \section{Results}
 \label{sec:results}
 
-\subsection{SITL Cascade Validation}
+\subsection{Degradation Robustness}
 
-The SITL results in Section~\ref{sec:sitl_results} confirm that the Detection $\rightarrow$ Kalman $\rightarrow$ PINN $\rightarrow$ Hold cascade operates as designed. Three observations from the 97.3~s session are worth noting.
+The key quantitative finding is the detector architecture comparison under synthetic degradation, presented in full in Section~\ref{sec:degradation_results}. RF-DETR outperforms YOLOv8n by +39.8 mAP@0.5 points under maximum Gaussian noise and +39.4 points under maximum low-light severity, while both models are comparably degraded by motion blur at high severity. Table~\ref{tab:clean_baseline} and Table~\ref{tab:degradation_avg} summarize the key metrics.
 
-First, the transition between Kalman and PINN modes is seamless. The 0.1~s timeout gives the Kalman filter a brief window to handle transient single-frame dropouts (which do not require the overhead of PINN inference), while the PINN takes over for sustained occlusion. The 24.3\% Kalman vs.\ 56.5\% PINN split reflects this handoff: most of the forced 0.5~s dropout window falls beyond the Kalman timeout.
-
-Second, the hold fallback accounted for only 0.5\% of total time. This mode activates when neither Kalman nor PINN state is available, which occurs only during the first few frames of each dropout before the Kalman filter produces its first extrapolation. The near-zero hold fraction validates that the prediction pipeline has no initialization gaps under normal operation.
-
-Third, the yaw tracking remained stable throughout all 25 dropout-recovery cycles with no oscillation or divergence after PINN-to-detection handback. The mean yaw command magnitude of 20.95~deg/s and maximum of 57.3~deg/s reflect the aggressive sinusoidal target motion; the $\pm$2~rad/s rate clamp in the PX4 converter prevented actuator saturation.
-
-\subsection{Hardware Flight Results}
-
-Hardware flight testing with the Jetson Orin Nano and RealSense D455 is in progress. Results will include:
-\begin{itemize}
-    \item Detection latency and FPS for RF-DETR (TensorRT FP16) vs.\ YOLOv8n under real lighting conditions
-    \item Yaw tracking error relative to PX4 ground-truth attitude during continuous tracking and dropout recovery
-    \item PINN vs.\ Kalman-only prediction accuracy, measured as angular error at dropout recovery
-    \item End-to-end system latency from camera frame capture to PX4 setpoint publication
-\end{itemize}
+% TODO [Lead]: Fill in system integration and hardware flight results once
+% data is available from the Tracking, Controls, and Flight Ops teams.
+%
+% Planned subsections:
+%   9.2  System Integration (SITL cascade validation -- from Middleware + QA)
+%   9.3  Hardware Flight Results (detection FPS, yaw tracking error, PINN vs
+%        Kalman dropout recovery, end-to-end latency -- from all teams)
 
 % ============================================================================
 \section{Discussion}
@@ -558,15 +337,11 @@ The degradation evaluation reveals a clear architectural advantage for transform
 
 The comparable performance of both architectures under motion blur is notable. Blur affects the entire image globally (all pixels shift in the blur direction), eliminating the local-vs-global distinction that gives transformers their advantage under localized corruption. This suggests that blur mitigation requires approaches outside the detector architecture, such as electronic image stabilization or exposure time reduction.
 
-\subsection{PINN vs.\ Kalman Prediction}
-
-The physics-informed loss serves a specific function: preventing velocity explosion during iterative prediction. When the PINN feeds its own outputs back as inputs during multi-second dropouts, unconstrained networks produce accelerating trajectories. The $\|\mathbf{v}\| \leq 10$~m/s soft constraint bounds this divergence. Whether the PINN outperforms constant-velocity Kalman extrapolation for short dropouts ($<$0.5~s) is an empirical question that hardware flight testing will resolve; the Kalman filter's simplicity may suffice for brief occlusion events where the target trajectory remains approximately linear.
-
-\subsection{Limitations}
-
-Several limitations apply to the current system. First, depth accuracy from the D455 stereo pair degrades beyond 4--6~m, limiting the effective tracking range. Second, the current control implementation is yaw-only; altitude and pitch viewing control are staged future extensions. Third, the PINN training data comes from SITL scripted trajectories, not real flight data; the network may underperform on real target motion patterns not represented in the training distribution. Fourth, the degradation evaluation uses synthetic corruption applied to clean validation images, which may not capture the joint distribution of real-world degradation (e.g., simultaneous blur and low light during dusk flights).
-
-The modular architecture is designed to address these limitations incrementally: the PINN can be retrained on real flight data without modifying other pipeline components, and additional control axes can be added through the existing ROS~2 topic interface.
+% TODO [Lead]: Expand Discussion once hardware results are in.
+%
+% Planned subsections:
+%   10.2  PINN vs. Kalman Prediction (requires flight data from Tracking team)
+%   10.3  Limitations (depth range, training data distribution, etc.)
 
 % ============================================================================
 \section{Conclusion}
