@@ -1,4 +1,10 @@
-# ROS2 build artifacts
+# Claude Code MCP config (never commit — may contain personal service URLs)
+.mcp.json
+
+# ROS2 build artifacts (colcon output, whether run from root or ws_ros2/)
+build/
+install/
+log/
 ws_ros2/build/
 ws_ros2/install/
 ws_ros2/log/
@@ -40,6 +46,7 @@ data/pinn_training/
 # PINN model artifacts (trained locally, not committed)
 models/pinn/*.pth
 models/pinn/*.onnx
+models/pinn/*.onnx.data
 models/pinn/*.engine
 models/pinn/norm_stats.npz
 models/pinn/config.txt
@@ -48,6 +55,9 @@ models/pinn/config.txt
 # Large training rosbag collections should use external storage
 # Small sample/test rosbags can go in data/rosbags/ via LFS
 data/samples/camera_validation_sample/  # 1.3GB sample - external storage
+
+# Rosbag test outputs
+testbag/
 
 # Benchmark raw outputs (keep summaries in data/analysis/)
 benchmark_results/
