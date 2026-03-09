@@ -90,7 +90,7 @@ def generate_launch_description():
         'enable_pinn', default_value='false',
         description='Enable PINN trajectory prediction during dropout')
     pinn_model_arg = DeclareLaunchArgument(
-        'pinn_model_path', default_value='models/pinn/pinn_best.onnx')
+        'pinn_model_path', default_value='models/pinn/pinn_best_ir8.onnx')
     pinn_norm_arg = DeclareLaunchArgument(
         'pinn_norm_stats_path', default_value='models/pinn/norm_stats.npz')
 

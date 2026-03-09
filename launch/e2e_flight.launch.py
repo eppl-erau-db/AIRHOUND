@@ -74,7 +74,13 @@ def generate_launch_description():
     camera_source_arg = DeclareLaunchArgument(
         'camera_source',
         default_value='realsense',
-        description='Detection source: "realsense" (real camera) or "synthetic" (mock detector)'
+        description='Detection source: "realsense", "v4l2" (V4L2 bridge), or "synthetic" (mock)'
+    )
+
+    detector_type_arg = DeclareLaunchArgument(
+        'detector_type',
+        default_value='rfdetr',
+        description='Detector backend: "yolo" or "rfdetr"'
     )
     
     # Camera arguments (only used when camera_source=realsense)
@@ -86,27 +92,27 @@ def generate_launch_description():
     
     rgb_width_arg = DeclareLaunchArgument(
         'rgb_width',
-        default_value='1280',
-        description='RGB camera width'
+        default_value='640',
+        description='RGB camera width (640 for USB 2.0, 1280 for USB 3.0)'
     )
-    
+
     rgb_height_arg = DeclareLaunchArgument(
         'rgb_height',
-        default_value='720',
-        description='RGB camera height'
+        default_value='480',
+        description='RGB camera height (480 for USB 2.0, 720 for USB 3.0)'
     )
-    
+
     rgb_fps_arg = DeclareLaunchArgument(
         'rgb_fps',
-        default_value='30',
-        description='RGB camera FPS'
+        default_value='15',
+        description='RGB camera FPS (15 for USB 2.0, 30 for USB 3.0)'
     )
     
-    # Detector arguments (only used when camera_source=realsense)
+    # Detector arguments (only used when camera_source=realsense or v4l2)
     model_path_arg = DeclareLaunchArgument(
         'model_path',
-        default_value='models/yolov8Detector.engine',
-        description='Path to YOLO model (TensorRT .engine or PyTorch .pt)'
+        default_value='models/drone_rfdetr.engine',
+        description='Path to detector model (TensorRT .engine, ONNX .onnx, or PyTorch .pt)'
     )
     
     confidence_threshold_arg = DeclareLaunchArgument(
@@ -257,12 +263,22 @@ def generate_launch_description():
     use_realsense = IfCondition(
         PythonExpression(["'", LaunchConfiguration('camera_source'), "' == 'realsense'"])
     )
-    
+
+    # Condition: camera_source == "v4l2" (V4L2 bridge for D455 on USB 2.0 / ARM64)
+    use_v4l2 = IfCondition(
+        PythonExpression(["'", LaunchConfiguration('camera_source'), "' == 'v4l2'"])
+    )
+
     # Condition: camera_source == "synthetic"
     use_synthetic = IfCondition(
         PythonExpression(["'", LaunchConfiguration('camera_source'), "' == 'synthetic'"])
     )
-    
+
+    # Condition: need real detector (realsense or v4l2)
+    use_real_detector = IfCondition(
+        PythonExpression(["'", LaunchConfiguration('camera_source'), "' in ('realsense', 'v4l2')"])
+    )
+
     # Condition: launch camera AND camera_source == "realsense"
     launch_realsense = IfCondition(
         PythonExpression([
@@ -305,7 +321,23 @@ def generate_launch_description():
         ]
     )
     
-    # Detector Node - Real YOLO/RF-DETR (only when camera_source=realsense)
+    # V4L2 Camera Bridge Node (only when camera_source=v4l2)
+    # Workaround for librealsense2 "bad optional access" bug on ARM64 + USB 2.0
+    v4l2_bridge_script = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), '..', 'scripts', 'v4l2_camera_bridge.py')
+    v4l2_bridge_node = ExecuteProcess(
+        cmd=[
+            'python3', v4l2_bridge_script,
+            '--ros-args',
+            '-p', ['width:=', LaunchConfiguration('rgb_width')],
+            '-p', ['height:=', LaunchConfiguration('rgb_height')],
+            '-p', ['fps:=', LaunchConfiguration('rgb_fps')],
+        ],
+        output='screen',
+        condition=use_v4l2,
+    )
+
+    # Detector Node - RF-DETR/YOLO (when camera_source=realsense or v4l2)
     # Subscribes: /camera/color/image_raw
     # Publishes: /detections (Detection2DArray)
     detector_node = Node(
@@ -313,13 +345,15 @@ def generate_launch_description():
         executable='detector_node',
         name='detector_node',
         output='screen',
-        condition=use_realsense,
+        condition=use_real_detector,
         parameters=[{
+            'detector_type': LaunchConfiguration('detector_type'),
             'model_path': LaunchConfiguration('model_path'),
-            'confidence_threshold': LaunchConfiguration('confidence_threshold'),
+            'conf': LaunchConfiguration('confidence_threshold'),
             'device': LaunchConfiguration('device'),
             'input_image_topic': '/camera/color/image_raw',
             'output_detections_topic': '/detections',
+            'camera_info_topic': '/camera/camera_info',
         }]
     )
     
@@ -491,6 +525,7 @@ def generate_launch_description():
     return LaunchDescription([
         # Declare arguments
         camera_source_arg,
+        detector_type_arg,
         camera_serial_arg,
         rgb_width_arg,
         rgb_height_arg,
@@ -530,6 +565,7 @@ def generate_launch_description():
         
         # Launch nodes
         realsense_node,
+        v4l2_bridge_node,
         detector_node,
         mock_detector_node,
         tracking_node,

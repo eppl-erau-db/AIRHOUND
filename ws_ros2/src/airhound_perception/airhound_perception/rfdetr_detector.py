@@ -28,7 +28,7 @@ import numpy as np
 try:
     from rfdetr import RFDETRBase, RFDETRLarge  # type: ignore[import-not-found]
     RFDETR_AVAILABLE = True
-except ImportError:
+except (ImportError, AttributeError):
     RFDETR_AVAILABLE = False
     RFDETRBase = None
     RFDETRLarge = None
@@ -37,20 +37,20 @@ except ImportError:
 try:
     import onnxruntime as ort  # type: ignore[import-not-found]
     ORT_AVAILABLE = True
-except ImportError:
+except (ImportError, AttributeError):
     ORT_AVAILABLE = False
     ort = None
 
-# Try importing TensorRT for engine inference
+# Try importing TensorRT for engine inference (using ctypes CUDA, no pycuda needed)
 try:
     import tensorrt as trt  # type: ignore[import-not-found]
-    import pycuda.driver as cuda  # type: ignore[import-not-found]
-    import pycuda.autoinit  # type: ignore[import-not-found]
+    import ctypes as _ctypes
+    _cudart = _ctypes.CDLL("libcudart.so")
     TRT_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError):
     TRT_AVAILABLE = False
     trt = None
-    cuda = None
+    _cudart = None
 
 
 @dataclass
@@ -240,31 +240,28 @@ class RFDETRDetector:
             print(f"[RFDETRDetector] Loaded TensorRT engine")
 
     def _allocate_trt_buffers(self) -> None:
-        """Allocate input/output buffers for TensorRT inference."""
+        """Allocate input/output buffers for TensorRT inference (no pycuda)."""
         self.trt_inputs = []
         self.trt_outputs = []
-        self.trt_bindings = []
-        self.trt_stream = cuda.Stream()
 
         for i in range(self.trt_engine.num_io_tensors):
             name = self.trt_engine.get_tensor_name(i)
             dtype = trt.nptype(self.trt_engine.get_tensor_dtype(name))
-            shape = self.trt_engine.get_tensor_shape(name)
+            shape = tuple(self.trt_engine.get_tensor_shape(name))
 
-            # Handle dynamic shapes
             if -1 in shape:
                 shape = tuple(max(1, s) for s in shape)
 
-            size = int(np.prod(shape))
-            host_mem = cuda.pagelocked_empty(size, dtype)
-            device_mem = cuda.mem_alloc(host_mem.nbytes)
+            host_mem = np.empty(shape, dtype=dtype)
+            ptr = _ctypes.c_void_p()
+            _cudart.cudaMalloc(_ctypes.byref(ptr), _ctypes.c_size_t(host_mem.nbytes))
 
-            self.trt_bindings.append(int(device_mem))
+            buf = {"name": name, "host": host_mem, "device": ptr, "shape": shape}
 
             if self.trt_engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT:
-                self.trt_inputs.append({"host": host_mem, "device": device_mem, "shape": shape})
+                self.trt_inputs.append(buf)
             else:
-                self.trt_outputs.append({"host": host_mem, "device": device_mem, "shape": shape})
+                self.trt_outputs.append(buf)
 
     def _preprocess(self, image_bgr: np.ndarray) -> np.ndarray:
         """
@@ -481,45 +478,36 @@ class RFDETRDetector:
     def _infer_tensorrt(
         self, image_bgr: np.ndarray, original_size: Tuple[int, int]
     ) -> List[Detection]:
-        """Run inference using TensorRT engine."""
+        """Run inference using TensorRT engine (ctypes CUDA, no pycuda)."""
         input_tensor = self._preprocess(image_bgr)
 
         # Copy input to device
-        np.copyto(self.trt_inputs[0]["host"], input_tensor.ravel())
-        cuda.memcpy_htod_async(
-            self.trt_inputs[0]["device"],
-            self.trt_inputs[0]["host"],
-            self.trt_stream,
+        inp = self.trt_inputs[0]
+        np.copyto(inp["host"], input_tensor)
+        _cudart.cudaMemcpy(
+            inp["device"],
+            inp["host"].ctypes.data_as(_ctypes.c_void_p),
+            _ctypes.c_size_t(inp["host"].nbytes),
+            _ctypes.c_int(1),  # cudaMemcpyHostToDevice
         )
 
-        # Run inference - TensorRT 10.x uses execute_async_v3, older uses execute_async_v2
-        if hasattr(self.trt_context, 'execute_async_v3'):
-            # TensorRT 10.x API - set tensor addresses first
-            for i, inp in enumerate(self.trt_inputs):
-                name = self.trt_engine.get_tensor_name(i)
-                self.trt_context.set_tensor_address(name, int(inp["device"]))
-            for i, out in enumerate(self.trt_outputs):
-                name = self.trt_engine.get_tensor_name(i + len(self.trt_inputs))
-                self.trt_context.set_tensor_address(name, int(out["device"]))
-            self.trt_context.execute_async_v3(stream_handle=self.trt_stream.handle)
-        else:
-            # TensorRT 8.x/9.x API
-            self.trt_context.execute_async_v2(
-                bindings=self.trt_bindings,
-                stream_handle=self.trt_stream.handle,
-            )
+        # Set tensor addresses and execute
+        for buf in self.trt_inputs + self.trt_outputs:
+            self.trt_context.set_tensor_address(buf["name"], buf["device"].value)
 
-        # Copy outputs to host
-        for out in self.trt_outputs:
-            cuda.memcpy_dtoh_async(out["host"], out["device"], self.trt_stream)
+        self.trt_context.execute_async_v3(stream_handle=0)
+        _cudart.cudaDeviceSynchronize()
 
-        self.trt_stream.synchronize()
-
-        # Build output dict
+        # Copy outputs back
         output_dict = {}
-        for i, out in enumerate(self.trt_outputs):
-            name = self.trt_engine.get_tensor_name(i + len(self.trt_inputs))
-            output_dict[name] = out["host"].reshape(out["shape"])
+        for buf in self.trt_outputs:
+            _cudart.cudaMemcpy(
+                buf["host"].ctypes.data_as(_ctypes.c_void_p),
+                buf["device"],
+                _ctypes.c_size_t(buf["host"].nbytes),
+                _ctypes.c_int(2),  # cudaMemcpyDeviceToHost
+            )
+            output_dict[buf["name"]] = buf["host"]
 
         return self._postprocess(output_dict, original_size)
 

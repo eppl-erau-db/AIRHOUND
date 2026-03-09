@@ -12,6 +12,7 @@ import time
 from typing import Optional, Union
 
 import rclpy
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from rclpy.time import Time as RclTime
@@ -80,7 +81,8 @@ class PerceptionNode(Node):
 
         # Common detector params
         self.declare_parameter('conf', 0.25)
-        self.declare_parameter('device', '0')
+        self.declare_parameter('device', '0',
+                               ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
 
         # YOLO-specific params
         self.declare_parameter('imgsz', 1280)
@@ -201,7 +203,10 @@ class PerceptionNode(Node):
         detector_type = self.get_parameter('detector_type').get_parameter_value().string_value.lower()
         model_path = self.get_parameter('model_path').get_parameter_value().string_value
         conf = float(self.get_parameter('conf').get_parameter_value().double_value or 0.25)
-        device = self.get_parameter('device').get_parameter_value().string_value or '0'
+        try:
+            device = str(self.get_parameter('device').value)
+        except Exception:
+            device = '0'
 
         # Resolve model path if relative
         if not os.path.isabs(model_path) and not os.path.exists(model_path):

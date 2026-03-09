@@ -193,14 +193,18 @@ ping -c 3 192.168.0.4   # Should show <1ms RTT
 
 ## Step 7: Run the HITL Smoke Test
 
-The smoke test script is saved on the Jetson at `/tmp/hitl_smoke_test.py`.
+The smoke test script is in the AIRHOUND repo at `scripts/hitl_smoke_test.py`.
 It sends HIL_SENSOR + HIL_GPS packets and confirms `HIL_ACTUATOR_CONTROLS` are received.
 
 **From the Jetson:**
 
 ```bash
-python3 /tmp/hitl_smoke_test.py
+cd ~/workspace/AIRHOUND
+python3 scripts/hitl_smoke_test.py
 ```
+
+> **Note:** Previously these scripts lived in `/tmp/` and were lost on reboot.
+> They are now permanently in the repo under `scripts/`.
 
 Expected output (confirmed passing):
 
@@ -243,6 +247,54 @@ MicroXRCEAgent udp4 -p 8888
 ```
 
 PX4 ROS2 topics will appear under `/fmu/` once the session connects.
+
+---
+
+## ESC Beeping Fix (px4io Firmware Patch)
+
+**Problem:** In HIL mode, ESCs beep and jitter continuously on battery power even though
+motors should not spin. This happens because the IO coprocessor (px4io) starts unconditionally
+during boot — there is no `SYS_HITL` guard in rcS. The HIL airframe 1001 sets `HIL_ACT_FUNCx`
+for `pwm_out_sim` but does NOT set `PWM_MAIN_FUNCx` for px4io. With all channels at func=0
+(disabled), `MixingOutput` sends 0μs PWM to the IO MCU, which the ESCs interpret as an
+invalid signal.
+
+**Fix:** One-line change in `src/drivers/px4io/px4io.cpp`, in the `updateOutputs()` method
+(line ~369):
+
+```cpp
+// BEFORE:
+if (!_mixing_output.isFunctionSet(i)) {
+    // do not run any signal on disabled channels
+    outputs[i] = 0;
+}
+
+// AFTER:
+if (!_mixing_output.isFunctionSet(i)) {
+    // output disarmed value on disabled channels (prevents ESC beep from floating pins)
+    outputs[i] = _mixing_output.disarmedValue(i);
+}
+```
+
+This makes disabled channels output the disarmed value (typically 1000μs) instead of 0μs.
+All 8 MAIN outputs will show a clean 1000μs signal, which ESCs recognize as "disarmed."
+
+**Why other approaches fail:**
+- Stopping px4io (via rcS guard or `extras.txt`) causes the IO MCU pins to float, which
+  also triggers ESC beeping from electrical noise
+- `px4io lockdown enable` does not exist in this PX4 version
+- `SYS_USE_IO` parameter does not exist in this PX4 version
+- Starting `pwm_out` in extras.txt only controls FMU/AUX pins, not IO/MAIN pins
+
+After applying this fix, rebuild and reflash:
+
+```bash
+cd ~/PX4-Autopilot
+make px4_fmu-v6x_multicopter
+# Flash via USB from laptop:
+python3 Tools/px_uploader.py /dev/ttyACM0 \
+    build/px4_fmu-v6x_multicopter/px4_fmu-v6x_multicopter.px4
+```
 
 ---
 
@@ -295,4 +347,4 @@ print(val)  # -1062731773
 
 ---
 
-*Last updated: February 2026 — HITL confirmed working on Auterion fmu-v6x hardware*
+*Last updated: March 2026 — HITL confirmed working on Auterion fmu-v6x hardware, ESC beeping fix applied*
