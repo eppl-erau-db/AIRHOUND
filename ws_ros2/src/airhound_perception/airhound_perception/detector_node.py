@@ -80,9 +80,9 @@ class PerceptionNode(Node):
 
         # Common detector params
         self.declare_parameter('conf', 0.25)
-        # Note: no ParameterDescriptor type enforcement — YAML parsing converts '0' to int,
-        # and ROS2 rejects int overrides against STRING type. Handle in getter with str().
-        self.declare_parameter('device', '0')
+        # No default value — YAML parsing converts '0' to int, and ROS2 rejects int
+        # overrides against a STRING-typed default. Declare untyped, handle in getter.
+        self.declare_parameter('device')
 
         # YOLO-specific params
         self.declare_parameter('imgsz', 1280)
@@ -204,7 +204,8 @@ class PerceptionNode(Node):
         model_path = self.get_parameter('model_path').get_parameter_value().string_value
         conf = float(self.get_parameter('conf').get_parameter_value().double_value or 0.25)
         try:
-            device = str(self.get_parameter('device').value)
+            val = self.get_parameter('device').value
+            device = str(val) if val is not None else '0'
         except Exception:
             device = '0'
 
