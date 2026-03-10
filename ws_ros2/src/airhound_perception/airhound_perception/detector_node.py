@@ -12,7 +12,6 @@ import time
 from typing import Optional, Union
 
 import rclpy
-from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from rclpy.time import Time as RclTime
@@ -81,8 +80,9 @@ class PerceptionNode(Node):
 
         # Common detector params
         self.declare_parameter('conf', 0.25)
-        self.declare_parameter('device', '0',
-                               ParameterDescriptor(type=ParameterType.PARAMETER_STRING))
+        # Note: no ParameterDescriptor type enforcement — YAML parsing converts '0' to int,
+        # and ROS2 rejects int overrides against STRING type. Handle in getter with str().
+        self.declare_parameter('device', '0')
 
         # YOLO-specific params
         self.declare_parameter('imgsz', 1280)
