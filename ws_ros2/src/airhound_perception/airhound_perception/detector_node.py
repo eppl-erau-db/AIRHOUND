@@ -80,9 +80,10 @@ class PerceptionNode(Node):
 
         # Common detector params
         self.declare_parameter('conf', 0.25)
-        # No default value — YAML parsing converts '0' to int, and ROS2 rejects int
-        # overrides against a STRING-typed default. Declare untyped, handle in getter.
-        self.declare_parameter('device')
+        # Use dynamic_typing to accept both string '0' and YAML-parsed integer 0
+        from rcl_interfaces.msg import ParameterDescriptor
+        self.declare_parameter('device', '0',
+                               ParameterDescriptor(dynamic_typing=True))
 
         # YOLO-specific params
         self.declare_parameter('imgsz', 1280)
