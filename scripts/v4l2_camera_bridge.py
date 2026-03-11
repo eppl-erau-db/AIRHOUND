@@ -25,16 +25,18 @@ class V4L2CameraBridge(Node):
     def __init__(self):
         super().__init__('v4l2_camera_bridge')
 
+        from rcl_interfaces.msg import ParameterDescriptor
+        dyn = ParameterDescriptor(dynamic_typing=True)
         self.declare_parameter('device', '/dev/video2')
-        self.declare_parameter('width', 640)
-        self.declare_parameter('height', 480)
-        self.declare_parameter('fps', 15.0)
+        self.declare_parameter('width', 640, dyn)
+        self.declare_parameter('height', 480, dyn)
+        self.declare_parameter('fps', 15.0, dyn)
         self.declare_parameter('frame_id', 'camera_color_optical_frame')
 
         device = self.get_parameter('device').value
-        self.width = self.get_parameter('width').value
-        self.height = self.get_parameter('height').value
-        fps = self.get_parameter('fps').value
+        self.width = int(self.get_parameter('width').value)
+        self.height = int(self.get_parameter('height').value)
+        fps = float(self.get_parameter('fps').value)
         self.frame_id = self.get_parameter('frame_id').value
 
         self.bridge = CvBridge()
