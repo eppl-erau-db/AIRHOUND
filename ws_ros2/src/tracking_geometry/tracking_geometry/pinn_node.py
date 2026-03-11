@@ -16,7 +16,7 @@ Outputs:
     /tracking/pinn_active (Bool) - Whether PINN is actively predicting (dropout mode)
 
 Parameters:
-    model_path (str): Path to trained PINN model (.pth or .onnx)
+    model_path (str): Path to trained PINN model (.pth, .onnx, or .engine)
     norm_stats_path (str): Path to normalization stats (.npz)
     prediction_horizon (float): How far ahead to predict (seconds). Default: 0.1
     dropout_timeout (float): Seconds without detection before activating PINN. Default: 0.1
@@ -67,6 +67,9 @@ class PINNPredictionNode(Node):
         self.model = None
         self.norm_stats = None
         self.ort_session = None
+        self.trt_context = None
+        self.trt_inputs = None
+        self.trt_outputs = None
         self._load_model()
 
         # QoS
@@ -128,7 +131,9 @@ class PINNPredictionNode(Node):
             self.get_logger().warn(f"Model not found: {self.model_path}. PINN disabled.")
             return
 
-        if self.use_onnx or self.model_path.endswith('.onnx'):
+        if self.model_path.endswith('.engine'):
+            self._load_tensorrt()
+        elif self.use_onnx or self.model_path.endswith('.onnx'):
             self._load_onnx()
         else:
             self._load_pytorch()
@@ -175,6 +180,44 @@ class PINNPredictionNode(Node):
             self.get_logger().error(f"Failed to load ONNX model: {e}")
             self.ort_session = None
 
+    def _load_tensorrt(self):
+        """Load TensorRT engine (ctypes CUDA, no pycuda)."""
+        try:
+            import tensorrt as trt
+            import ctypes
+
+            self._ctypes = ctypes
+            self._cudart = ctypes.CDLL("libcudart.so")
+
+            logger = trt.Logger(trt.Logger.WARNING)
+            with open(self.model_path, "rb") as f:
+                runtime = trt.Runtime(logger)
+                engine = runtime.deserialize_cuda_engine(f.read())
+
+            self.trt_context = engine.create_execution_context()
+            self.trt_context.set_input_shape("state_dt", (1, 7))
+
+            self.trt_inputs = []
+            self.trt_outputs = []
+            for i in range(engine.num_io_tensors):
+                name = engine.get_tensor_name(i)
+                shape = tuple(self.trt_context.get_tensor_shape(name))
+                dtype = trt.nptype(engine.get_tensor_dtype(name))
+                host = np.empty(shape, dtype=dtype)
+                ptr = ctypes.c_void_p()
+                self._cudart.cudaMalloc(ctypes.byref(ptr), ctypes.c_size_t(host.nbytes))
+                buf = {"name": name, "host": host, "device": ptr}
+                if engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT:
+                    self.trt_inputs.append(buf)
+                else:
+                    self.trt_outputs.append(buf)
+
+            self._trt_engine = engine  # prevent GC
+            self.get_logger().info(f"Loaded TensorRT PINN from {self.model_path}")
+        except Exception as e:
+            self.get_logger().error(f"Failed to load TensorRT model: {e}")
+            self.trt_context = None
+
     def _predict(self, state: np.ndarray, dt: float) -> Optional[np.ndarray]:
         """
         Run PINN inference.
@@ -201,7 +244,29 @@ class PINNPredictionNode(Node):
         inp_norm = (inp - self.norm_stats['input_mean']) / self.norm_stats['input_std']
         inp_norm = inp_norm.reshape(1, -1)
 
-        if self.ort_session is not None:
+        if self.trt_context is not None:
+            # TensorRT inference
+            inp_buf = self.trt_inputs[0]
+            np.copyto(inp_buf["host"], inp_norm)
+            self._cudart.cudaMemcpy(
+                inp_buf["device"],
+                inp_buf["host"].ctypes.data_as(self._ctypes.c_void_p),
+                self._ctypes.c_size_t(inp_buf["host"].nbytes),
+                self._ctypes.c_int(1),  # cudaMemcpyHostToDevice
+            )
+            for buf in self.trt_inputs + self.trt_outputs:
+                self.trt_context.set_tensor_address(buf["name"], buf["device"].value)
+            self.trt_context.execute_async_v3(stream_handle=0)
+            self._cudart.cudaDeviceSynchronize()
+            out_buf = self.trt_outputs[0]
+            self._cudart.cudaMemcpy(
+                out_buf["host"].ctypes.data_as(self._ctypes.c_void_p),
+                out_buf["device"],
+                self._ctypes.c_size_t(out_buf["host"].nbytes),
+                self._ctypes.c_int(2),  # cudaMemcpyDeviceToHost
+            )
+            out_norm = out_buf["host"][0]
+        elif self.ort_session is not None:
             # ONNX inference
             input_name = self.ort_session.get_inputs()[0].name
             result = self.ort_session.run(None, {input_name: inp_norm})
