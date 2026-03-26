@@ -12,4 +12,7 @@
 *.toc
 
 # Compiled PDF (regenerate from source)
-*.pdf
+main.pdf
+
+# Track figure PDFs
+!figures/*.pdf

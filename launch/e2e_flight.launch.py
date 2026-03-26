@@ -279,6 +279,11 @@ def generate_launch_description():
         PythonExpression(["'", LaunchConfiguration('camera_source'), "' in ('realsense', 'v4l2')"])
     )
 
+    # Condition: camera_source == "realsense" (need external ROS2 image subscriber)
+    use_realsense_detector = IfCondition(
+        PythonExpression(["'", LaunchConfiguration('camera_source'), "' == 'realsense'"])
+    )
+
     # Condition: launch camera AND camera_source == "realsense"
     launch_realsense = IfCondition(
         PythonExpression([
@@ -321,31 +326,39 @@ def generate_launch_description():
         ]
     )
     
-    # V4L2 Camera Bridge Node (only when camera_source=v4l2)
-    # Workaround for librealsense2 "bad optional access" bug on ARM64 + USB 2.0
-    v4l2_bridge_script = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), '..', 'scripts', 'v4l2_camera_bridge.py')
-    v4l2_bridge_node = ExecuteProcess(
-        cmd=[
-            'python3', v4l2_bridge_script,
-            '--ros-args',
-            '-p', ['width:=', LaunchConfiguration('rgb_width')],
-            '-p', ['height:=', LaunchConfiguration('rgb_height')],
-            '-p', ['fps:=', LaunchConfiguration('rgb_fps')],
-        ],
-        output='screen',
-        condition=use_v4l2,
-    )
-
-    # Detector Node - RF-DETR/YOLO (when camera_source=realsense or v4l2)
-    # Subscribes: /camera/color/image_raw
-    # Publishes: /detections (Detection2DArray)
-    detector_node = Node(
+    # Detector Node - RF-DETR/YOLO with direct V4L2 capture (when camera_source=v4l2)
+    # Captures frames internally, bypasses ROS2 DDS image serialization
+    # Publishes: /detections, /camera/camera_info, /perception/*
+    detector_node_v4l2 = Node(
         package='airhound_perception',
         executable='detector_node',
         name='detector_node',
         output='screen',
-        condition=use_real_detector,
+        condition=use_v4l2,
+        parameters=[{
+            'detector_type': LaunchConfiguration('detector_type'),
+            'model_path': LaunchConfiguration('model_path'),
+            'conf': LaunchConfiguration('confidence_threshold'),
+            'device': LaunchConfiguration('device'),
+            'output_detections_topic': '/detections',
+            'camera_info_topic': '/camera/camera_info',
+            'camera_source': 'v4l2',
+            'v4l2_device': '/dev/video2',
+            'v4l2_width': LaunchConfiguration('rgb_width'),
+            'v4l2_height': LaunchConfiguration('rgb_height'),
+            'v4l2_fps': LaunchConfiguration('rgb_fps'),
+        }]
+    )
+
+    # Detector Node - RF-DETR/YOLO via ROS2 topic (when camera_source=realsense)
+    # Subscribes: /camera/color/image_raw
+    # Publishes: /detections (Detection2DArray)
+    detector_node_topic = Node(
+        package='airhound_perception',
+        executable='detector_node',
+        name='detector_node',
+        output='screen',
+        condition=use_realsense_detector,
         parameters=[{
             'detector_type': LaunchConfiguration('detector_type'),
             'model_path': LaunchConfiguration('model_path'),
@@ -565,8 +578,8 @@ def generate_launch_description():
         
         # Launch nodes
         realsense_node,
-        v4l2_bridge_node,
-        detector_node,
+        detector_node_v4l2,
+        detector_node_topic,
         mock_detector_node,
         tracking_node,
         pinn_node,

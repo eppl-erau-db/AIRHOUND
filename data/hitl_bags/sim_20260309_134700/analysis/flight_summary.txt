@@ -1,0 +1,30 @@
+AIRHOUND Flight Analysis
+==================================================
+Bag: data/hitl_bags/sim_20260309_134700
+Duration: 82.4 s
+
+Detection:
+  Rate:        22.9%
+  Dropouts:    4
+  Max dropout: 15.334 s
+
+Latency:
+  Mean:  ? ms
+  P95:   ? ms
+  P99:   ? ms
+
+FPS:
+  Mean:  30.0
+  Min:   30.0
+
+Control:
+  Mean |yaw cmd|: 10.84 deg/s
+  Max  |yaw cmd|: 57.3 deg/s
+
+Tracking Mode Breakdown:
+  detection   : 22.9%
+  kalman      : 3.9%
+  pinn        : 0.0%
+  hold        : 0.0%
+  decay       : 1.0%
+  zero        : 72.1%

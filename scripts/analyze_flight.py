@@ -8,8 +8,9 @@ Run after every flight to get immediate results.
 Usage:
     python3 analyze_flight.py ~/airhound_bags/flight_20260219_143000
     python3 analyze_flight.py ~/airhound_bags/sim_20260218_222227 --output-dir results/sim_01
+    python3 analyze_flight.py --batch data/hitl_bags/ --compare
 
-Produces:
+Produces (per bag):
     - yaw_tracking_error.pdf    (yaw rate command over time)
     - detection_timeline.pdf    (detection vs dropout intervals)
     - tracking_mode.pdf         (which fallback mode was active when)
@@ -18,14 +19,25 @@ Produces:
     - metrics_summary.csv       (all scalar metrics for paper tables)
     - flight_summary.txt        (human-readable flight report)
 
-Supports both clean and truncated MCAP bags (handles kill -9 gracefully).
+Produces (batch --compare):
+    - comparison/latency_boxplot.pdf
+    - comparison/fps_bar.pdf
+    - comparison/detection_rate_bar.pdf
+    - comparison/tracking_mode_stacked.pdf
+    - comparison/comparison.csv
+    - comparison/table.tex
+
+Supports SQLite3 (.db3/.db3.zstd) and MCAP bag formats.
 """
 
 import argparse
 import csv
 import os
+import sqlite3
 import struct
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 try:
@@ -39,21 +51,142 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
+# Bag file discovery
+# ---------------------------------------------------------------------------
+
+def find_bag_file(bag_path: Path) -> Path:
+    """Find the data file (.db3, .db3.zstd, or .mcap) inside a bag directory."""
+    if bag_path.is_file():
+        return bag_path
+
+    # Check for SQLite3 bags first (both compressed and uncompressed)
+    db3_zstd = sorted(bag_path.glob('*.db3.zstd'))
+    if db3_zstd:
+        return db3_zstd[0]
+    db3 = sorted(bag_path.glob('*.db3'))
+    if db3:
+        return db3[0]
+    mcaps = sorted(bag_path.glob('*.mcap'))
+    if mcaps:
+        return mcaps[0]
+
+    print(f"ERROR: No .db3, .db3.zstd, or .mcap file found in {bag_path}")
+    sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# SQLite3 extraction (ROS2 bag format)
+# ---------------------------------------------------------------------------
+
+def extract_all_messages_db3(db3_path: Path) -> tuple:
+    """
+    Read a ROS2 SQLite3 bag file.
+    Returns ({topic: [(timestamp_ns, raw_data), ...]}, {topic_id: (topic_name, type_name)}).
+    Handles truncated/malformed databases gracefully (common with kill -9 recordings).
+    """
+    conn = sqlite3.connect(str(db3_path))
+    cursor = conn.cursor()
+
+    # Read topic table
+    cursor.execute("SELECT id, name, type FROM topics")
+    topics = {}  # id -> (name, type)
+    for tid, name, ttype in cursor.fetchall():
+        topics[tid] = (name, ttype)
+
+    # Read all messages grouped by topic
+    messages = {}  # topic_name -> [(timestamp_ns, data)]
+    for tid, (tname, _) in topics.items():
+        messages[tname] = []
+
+    # Try direct read first, fall back to .recover if needed
+    try:
+        cursor.execute("SELECT topic_id, timestamp, data FROM messages ORDER BY timestamp ASC")
+        for topic_id, timestamp, data in cursor:
+            info = topics.get(topic_id)
+            if info:
+                tname, _ = info
+                messages[tname].append((timestamp, bytes(data)))
+        conn.close()
+    except sqlite3.DatabaseError:
+        conn.close()
+        # Database is malformed -- use sqlite3 .recover
+        recovered_path = recover_db3(db3_path)
+        try:
+            return extract_all_messages_db3(recovered_path)
+        finally:
+            recovered_path.unlink()
+
+    # Convert topics dict to channel-like format for compatibility
+    channels = {tid: (name, ttype) for tid, (name, ttype) in topics.items()}
+    return messages, channels
+
+
+def decompress_zstd(zstd_path: Path) -> Path:
+    """Decompress a .db3.zstd file to a temp .db3 file. Returns path to temp file.
+    Uses zstd CLI (falls back to zstandard Python module)."""
+    raw_tmp = tempfile.NamedTemporaryFile(suffix='.db3', delete=False)
+    raw_tmp.close()
+
+    # Try zstd CLI first (handles truncated streams better than Python module)
+    result = subprocess.run(
+        ['zstd', '-d', '-f', str(zstd_path), '-o', raw_tmp.name],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        # CLI may fail on truncated streams — try Python module as fallback
+        try:
+            import zstandard
+            dctx = zstandard.ZstdDecompressor()
+            with open(zstd_path, 'rb') as fin, open(raw_tmp.name, 'wb') as fout:
+                reader = dctx.stream_reader(fin)
+                while True:
+                    chunk = reader.read(65536)
+                    if not chunk:
+                        break
+                    fout.write(chunk)
+        except Exception:
+            pass  # truncated stream — we got what we got
+
+    # Check if the decompressed db3 is readable
+    try:
+        conn = sqlite3.connect(raw_tmp.name)
+        # Use row-by-row read — aggregate queries fail on corrupt indexes
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM topics")
+        cur.close()
+        conn.close()
+        return Path(raw_tmp.name)
+    except sqlite3.DatabaseError:
+        pass  # need recovery
+
+    # Recover corrupt db using sqlite3 .recover
+    recovered_tmp = tempfile.NamedTemporaryFile(suffix='.db3', delete=False)
+    recovered_tmp.close()
+    print("  Recovering truncated database...")
+    subprocess.run(
+        f'sqlite3 {raw_tmp.name} ".recover" | sqlite3 {recovered_tmp.name}',
+        shell=True, capture_output=True, text=True
+    )
+    os.unlink(raw_tmp.name)
+
+    # Verify recovery worked
+    try:
+        conn = sqlite3.connect(recovered_tmp.name)
+        count = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        conn.close()
+        print(f"  Recovered {count} messages")
+        return Path(recovered_tmp.name)
+    except Exception as e:
+        os.unlink(recovered_tmp.name)
+        print(f"ERROR: Could not recover database: {e}")
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
 # MCAP extraction (handles truncated files)
 # ---------------------------------------------------------------------------
 
-def find_mcap_file(bag_path: Path) -> Path:
-    """Find the .mcap file inside a bag directory."""
-    if bag_path.is_file() and bag_path.suffix == '.mcap':
-        return bag_path
-    mcaps = sorted(bag_path.glob('*.mcap'))
-    if not mcaps:
-        print(f"ERROR: No .mcap file found in {bag_path}")
-        sys.exit(1)
-    return mcaps[0]
-
-
-def extract_all_messages(mcap_path: Path) -> dict:
+def extract_all_messages_mcap(mcap_path: Path) -> tuple:
     """
     Stream-read an MCAP file and return {topic: [(timestamp_ns, raw_data), ...]}.
     Works on truncated files where the footer is corrupt.
@@ -82,9 +215,51 @@ def extract_all_messages(mcap_path: Path) -> dict:
                         topic, _ = info
                         messages[topic].append((record.log_time, record.data))
         except Exception:
-            pass  # truncated file — we got what we got
+            pass  # truncated file -- we got what we got
 
     return messages, channels
+
+
+def recover_db3(db3_path: Path) -> Path:
+    """Run sqlite3 .recover on a malformed db3 file. Returns path to recovered temp file."""
+    recovered_tmp = tempfile.NamedTemporaryFile(suffix='.db3', delete=False)
+    recovered_tmp.close()
+    print("  Recovering malformed database...")
+    subprocess.run(
+        f'sqlite3 {db3_path} ".recover" | sqlite3 {recovered_tmp.name}',
+        shell=True, capture_output=True, text=True
+    )
+    try:
+        conn = sqlite3.connect(recovered_tmp.name)
+        count = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        conn.close()
+        print(f"  Recovered {count} messages")
+        return Path(recovered_tmp.name)
+    except Exception as e:
+        os.unlink(recovered_tmp.name)
+        print(f"ERROR: Could not recover database: {e}")
+        sys.exit(1)
+
+
+def extract_messages(bag_file: Path) -> tuple:
+    """Auto-dispatch to the right extractor based on file extension."""
+    suffix = ''.join(bag_file.suffixes)  # e.g. '.db3.zstd' or '.db3' or '.mcap'
+    tmp_path = None
+    try:
+        if suffix.endswith('.db3.zstd'):
+            print(f"  Decompressing {bag_file.name}...")
+            tmp_path = decompress_zstd(bag_file)
+            return extract_all_messages_db3(tmp_path)
+        elif suffix.endswith('.db3'):
+            return extract_all_messages_db3(bag_file)
+        elif suffix.endswith('.mcap'):
+            return extract_all_messages_mcap(bag_file)
+        else:
+            print(f"ERROR: Unknown bag format: {suffix}")
+            sys.exit(1)
+    finally:
+        if tmp_path and tmp_path.exists():
+            tmp_path.unlink()
 
 
 # ---------------------------------------------------------------------------
@@ -133,10 +308,6 @@ def decode_quaternion_yaw(data: bytes) -> float:
 def decode_detection_count(data: bytes) -> int:
     """Decode detection count from vision_msgs/Detection2DArray CDR.
     Just counts the array length field."""
-    # header (stamp + frame_id) then detections sequence
-    # This is tricky with CDR. Simpler: count is encoded as uint32 before the array.
-    # For Detection2DArray: header + sequence<Detection2D>
-    # Rough: scan for sequence length after the header
     if len(data) < 20:
         return 0
     # Skip CDR encapsulation (4 bytes)
@@ -160,7 +331,7 @@ def decode_detection_count(data: bytes) -> int:
 
 
 def decode_float64_multiarray(data: bytes) -> list:
-    """Decode std_msgs/Float64MultiArray — extract the data array."""
+    """Decode std_msgs/Float64MultiArray -- extract the data array."""
     if len(data) < 12:
         return []
     off = 4  # CDR header
@@ -222,16 +393,16 @@ def compute_dropout_intervals(det_times, det_counts, threshold_sec=0.1):
 
 
 def analyze_bag(bag_path, output_dir):
-    """Main analysis pipeline."""
+    """Main analysis pipeline. Returns metrics dict (or None on failure)."""
     bag_path = Path(bag_path)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    mcap_path = find_mcap_file(bag_path)
-    print(f"Analyzing: {mcap_path}")
+    bag_file = find_bag_file(bag_path)
+    print(f"Analyzing: {bag_file}")
     print(f"Output:    {output_dir}")
 
-    messages, channels = extract_all_messages(mcap_path)
+    messages, channels = extract_messages(bag_file)
 
     # Report topics
     print(f"\nTopics in bag: {len(messages)}")
@@ -289,11 +460,12 @@ def analyze_bag(bag_path, output_dir):
     # ---- Compute metrics ----
     print("\nComputing metrics...")
     metrics = {}
+    metrics['bag_name'] = bag_path.name
 
     all_times = [t for t in [yaw_t, att_t, det_t, lat_t] if len(t) > 0]
     if not all_times:
         print("ERROR: No data found in bag. Check topic names.")
-        return
+        return None
     t0 = min(t[0] for t in all_times)
     flight_duration = max(t[-1] for t in all_times) - t0
     metrics['flight_duration_sec'] = round(flight_duration, 1)
@@ -348,6 +520,9 @@ def analyze_bag(bag_path, output_dir):
             pct = np.mean(mode_val == code) * 100
             metrics[f'mode_{label}_pct'] = round(float(pct), 1)
 
+    # Store raw latency values for comparison plots
+    metrics['_latency_raw'] = lat_ms
+
     # ---- Generate plots ----
     print("\nGenerating plots...")
     plt.rcParams.update({'font.size': 10, 'figure.dpi': 150})
@@ -358,7 +533,7 @@ def analyze_bag(bag_path, output_dir):
         ax.plot(yaw_t, np.degrees(yaw_cmd), linewidth=0.5, color='steelblue')
         ax.axhline(y=0, color='gray', linewidth=0.5, linestyle='--')
         ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Yaw Command (°/s)')
+        ax.set_ylabel('Yaw Command (\u00b0/s)')
         ax.set_title('Yaw Rate Command')
         ax.set_xlim(0, flight_duration)
         fig.tight_layout()
@@ -425,11 +600,11 @@ def analyze_bag(bag_path, output_dir):
     if len(att_yaw) > 0 and len(yaw_cmd) > 0:
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 5), sharex=True)
         ax1.plot(att_t, att_yaw, linewidth=0.5, color='darkblue')
-        ax1.set_ylabel('Drone Yaw (°)')
+        ax1.set_ylabel('Drone Yaw (\u00b0)')
         ax1.set_title('Ground Truth Yaw (PX4)')
         ax2.plot(yaw_t, np.degrees(yaw_cmd), linewidth=0.5, color='steelblue')
         ax2.axhline(y=0, color='gray', linewidth=0.5, linestyle='--')
-        ax2.set_ylabel('Yaw Command (°/s)')
+        ax2.set_ylabel('Yaw Command (\u00b0/s)')
         ax2.set_xlabel('Time (s)')
         ax2.set_title('Yaw Rate Command')
         ax1.set_xlim(0, flight_duration)
@@ -440,12 +615,13 @@ def analyze_bag(bag_path, output_dir):
 
     # ---- Write CSV ----
     csv_path = output_dir / 'metrics_summary.csv'
+    csv_metrics = {k: v for k, v in metrics.items() if not k.startswith('_')}
     with open(csv_path, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['metric', 'value'])
-        for k, v in sorted(metrics.items()):
+        for k, v in sorted(csv_metrics.items()):
             writer.writerow([k, v])
-    print(f"\n  -> metrics_summary.csv ({len(metrics)} metrics)")
+    print(f"\n  -> metrics_summary.csv ({len(csv_metrics)} metrics)")
 
     # ---- Write summary ----
     summary_path = output_dir / 'flight_summary.txt'
@@ -478,7 +654,7 @@ def analyze_bag(bag_path, output_dir):
             f.write(f"  {mode:12s}: {metrics.get(f'mode_{mode}_pct', '?')}%\n")
 
     print(f"  -> flight_summary.txt")
-    print(f"\nDone. {len(metrics)} metrics extracted.")
+    print(f"\nDone. {len(csv_metrics)} metrics extracted.")
 
     # Print summary to stdout
     print(f"\n{'=' * 50}")
@@ -487,13 +663,227 @@ def analyze_bag(bag_path, output_dir):
     with open(summary_path) as f:
         print(f.read())
 
+    return metrics
+
+
+# ---------------------------------------------------------------------------
+# Batch + comparison
+# ---------------------------------------------------------------------------
+
+def run_batch(bags_dir: Path, do_compare: bool):
+    """Run analysis on all bag subdirectories and optionally generate comparison."""
+    bags_dir = Path(bags_dir)
+    subdirs = sorted([d for d in bags_dir.iterdir() if d.is_dir() and d.name != 'comparison'])
+
+    if not subdirs:
+        print(f"ERROR: No subdirectories found in {bags_dir}")
+        sys.exit(1)
+
+    print(f"Found {len(subdirs)} bags in {bags_dir}\n")
+
+    all_metrics = []
+    for sd in subdirs:
+        print(f"\n{'#' * 60}")
+        print(f"# {sd.name}")
+        print(f"{'#' * 60}\n")
+        output_dir = sd / 'analysis'
+        m = analyze_bag(sd, output_dir)
+        if m is not None:
+            all_metrics.append(m)
+
+    if not all_metrics:
+        print("\nNo bags produced metrics.")
+        return
+
+    # Write combined comparison CSV
+    comp_dir = bags_dir / 'comparison'
+    comp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Collect all scalar keys across bags
+    all_keys = set()
+    for m in all_metrics:
+        all_keys.update(k for k in m.keys() if not k.startswith('_'))
+    col_order = ['bag_name', 'flight_duration_sec',
+                 'detection_rate_pct', 'num_dropouts', 'dropout_max_sec',
+                 'latency_mean_ms', 'latency_p50_ms', 'latency_p95_ms', 'latency_p99_ms',
+                 'fps_mean', 'fps_min',
+                 'yaw_cmd_mean_deg_s', 'yaw_cmd_max_deg_s',
+                 'mode_detection_pct', 'mode_kalman_pct', 'mode_pinn_pct',
+                 'mode_hold_pct', 'mode_decay_pct', 'mode_zero_pct']
+    # Add any keys not in our preferred order
+    extra = sorted(all_keys - set(col_order))
+    columns = [c for c in col_order if c in all_keys] + extra
+
+    csv_path = comp_dir / 'comparison.csv'
+    with open(csv_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=columns, extrasaction='ignore')
+        writer.writeheader()
+        for m in all_metrics:
+            row = {k: v for k, v in m.items() if not k.startswith('_')}
+            writer.writerow(row)
+    print(f"\n-> {csv_path}")
+
+    if do_compare:
+        generate_comparison(all_metrics, comp_dir)
+
+
+def generate_comparison(all_metrics: list, comp_dir: Path):
+    """Generate cross-bag comparison plots and LaTeX table."""
+    plt.rcParams.update({'font.size': 10, 'figure.dpi': 150})
+
+    names = [m['bag_name'] for m in all_metrics]
+    # Shorten names for plot labels: use last component, trim common prefix
+    short_names = []
+    for n in names:
+        # e.g. sim_20260309_134700 -> sim_0309
+        # e.g. flight_20260311_145227 -> flight_145227
+        parts = n.split('_')
+        if len(parts) >= 3:
+            prefix = parts[0]  # sim or flight
+            time_part = parts[-1]  # last segment (time)
+            short_names.append(f"{prefix}_{time_part}")
+        else:
+            short_names.append(n)
+
+    # 1. Latency box plot
+    latency_data = []
+    latency_labels = []
+    for m, sn in zip(all_metrics, short_names):
+        raw = m.get('_latency_raw', np.array([]))
+        if len(raw) > 0:
+            latency_data.append(raw)
+            latency_labels.append(sn)
+
+    if latency_data:
+        fig, ax = plt.subplots(figsize=(max(8, len(latency_data) * 1.5), 4))
+        bp = ax.boxplot(latency_data, tick_labels=latency_labels, patch_artist=True,
+                        showfliers=False, medianprops=dict(color='red', linewidth=1.5))
+        colors_cycle = ['#4C72B0', '#55A868', '#C44E52', '#8172B2', '#CCB974', '#64B5CD']
+        for i, patch in enumerate(bp['boxes']):
+            patch.set_facecolor(colors_cycle[i % len(colors_cycle)])
+            patch.set_alpha(0.7)
+        ax.set_ylabel('Latency (ms)')
+        ax.set_title('Inference Latency Distribution by Configuration')
+        plt.xticks(rotation=30, ha='right')
+        fig.tight_layout()
+        fig.savefig(comp_dir / 'latency_boxplot.pdf')
+        plt.close(fig)
+        print("  -> latency_boxplot.pdf")
+
+    # 2. FPS bar chart
+    fps_data = [(sn, m.get('fps_mean', 0)) for m, sn in zip(all_metrics, short_names)
+                if 'fps_mean' in m]
+    if fps_data:
+        fig, ax = plt.subplots(figsize=(max(7, len(fps_data) * 1.3), 4))
+        fps_names, fps_vals = zip(*fps_data)
+        bars = ax.bar(fps_names, fps_vals, color='#4C72B0', alpha=0.8, edgecolor='white')
+        for bar, val in zip(bars, fps_vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                    f'{val:.1f}', ha='center', va='bottom', fontsize=9)
+        ax.set_ylabel('Mean FPS')
+        ax.set_title('Mean Detection FPS by Configuration')
+        plt.xticks(rotation=30, ha='right')
+        fig.tight_layout()
+        fig.savefig(comp_dir / 'fps_bar.pdf')
+        plt.close(fig)
+        print("  -> fps_bar.pdf")
+
+    # 3. Detection rate bar chart
+    det_data = [(sn, m.get('detection_rate_pct', 0)) for m, sn in zip(all_metrics, short_names)
+                if 'detection_rate_pct' in m]
+    if det_data:
+        fig, ax = plt.subplots(figsize=(max(7, len(det_data) * 1.3), 4))
+        det_names, det_vals = zip(*det_data)
+        bars = ax.bar(det_names, det_vals, color='#55A868', alpha=0.8, edgecolor='white')
+        for bar, val in zip(bars, det_vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.5,
+                    f'{val:.1f}%', ha='center', va='bottom', fontsize=9)
+        ax.set_ylabel('Detection Rate (%)')
+        ax.set_title('Detection Rate by Configuration')
+        ax.set_ylim(0, 105)
+        plt.xticks(rotation=30, ha='right')
+        fig.tight_layout()
+        fig.savefig(comp_dir / 'detection_rate_bar.pdf')
+        plt.close(fig)
+        print("  -> detection_rate_bar.pdf")
+
+    # 4. Tracking mode stacked bar
+    mode_keys = ['mode_detection_pct', 'mode_kalman_pct', 'mode_pinn_pct',
+                 'mode_hold_pct', 'mode_decay_pct', 'mode_zero_pct']
+    mode_labels_plot = ['Detection', 'Kalman', 'PINN', 'Hold', 'Decay', 'Zero']
+    mode_colors = ['#55A868', '#F0A030', '#4C72B0', '#C44E52', '#E8A0A0', '#BBBBBB']
+
+    has_mode = any(any(k in m for k in mode_keys) for m in all_metrics)
+    if has_mode:
+        fig, ax = plt.subplots(figsize=(max(8, len(all_metrics) * 1.5), 4))
+        x = np.arange(len(short_names))
+        bottoms = np.zeros(len(short_names))
+        for mk, ml, mc in zip(mode_keys, mode_labels_plot, mode_colors):
+            vals = np.array([m.get(mk, 0) for m in all_metrics])
+            ax.bar(x, vals, bottom=bottoms, label=ml, color=mc, alpha=0.8, edgecolor='white')
+            bottoms += vals
+        ax.set_xticks(x)
+        ax.set_xticklabels(short_names, rotation=30, ha='right')
+        ax.set_ylabel('Time (%)')
+        ax.set_title('Tracking Mode Breakdown by Configuration')
+        ax.legend(loc='upper right', fontsize=8)
+        ax.set_ylim(0, 105)
+        fig.tight_layout()
+        fig.savefig(comp_dir / 'tracking_mode_stacked.pdf')
+        plt.close(fig)
+        print("  -> tracking_mode_stacked.pdf")
+
+    # 5. LaTeX table
+    tex_path = comp_dir / 'table.tex'
+    with open(tex_path, 'w') as f:
+        f.write("% Auto-generated by analyze_flight.py --compare\n")
+        f.write("\\begin{table}[htbp]\n")
+        f.write("\\centering\n")
+        f.write("\\caption{HITL Test Configuration Comparison}\n")
+        f.write("\\label{tab:hitl-comparison}\n")
+        f.write("\\begin{tabular}{l r r r r r r}\n")
+        f.write("\\toprule\n")
+        f.write("Configuration & Duration & Det.~Rate & Latency & P95 & FPS & Dropouts \\\\\n")
+        f.write(" & (s) & (\\%) & (ms) & (ms) & (mean) & \\\\\n")
+        f.write("\\midrule\n")
+        for m, sn in zip(all_metrics, short_names):
+            dur = m.get('flight_duration_sec', '--')
+            det = m.get('detection_rate_pct', '--')
+            lat = m.get('latency_mean_ms', '--')
+            p95 = m.get('latency_p95_ms', '--')
+            fps = m.get('fps_mean', '--')
+            ndo = m.get('num_dropouts', '--')
+            sn_tex = sn.replace('_', '\\_')
+            f.write(f"{sn_tex} & {dur} & {det} & {lat} & {p95} & {fps} & {ndo} \\\\\n")
+        f.write("\\bottomrule\n")
+        f.write("\\end{tabular}\n")
+        f.write("\\end{table}\n")
+    print(f"  -> table.tex")
+
+    print(f"\nComparison outputs in {comp_dir}")
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='AIRHOUND post-flight analysis')
-    parser.add_argument('bag_path', help='Path to rosbag directory or .mcap file')
+    parser.add_argument('bag_path', nargs='?', default=None,
+                        help='Path to rosbag directory or file')
     parser.add_argument('--output-dir', '-o', default=None,
                         help='Output directory (default: <bag_path>/analysis)')
+    parser.add_argument('--batch', metavar='DIR',
+                        help='Run analysis on all bag subdirectories in DIR')
+    parser.add_argument('--compare', action='store_true',
+                        help='Generate cross-bag comparison plots (requires --batch)')
     args = parser.parse_args()
 
-    output = args.output_dir or os.path.join(args.bag_path, 'analysis')
-    analyze_bag(args.bag_path, output)
+    if args.batch:
+        run_batch(Path(args.batch), args.compare)
+    elif args.bag_path:
+        output = args.output_dir or os.path.join(args.bag_path, 'analysis')
+        analyze_bag(args.bag_path, output)
+    else:
+        parser.print_help()
+        sys.exit(1)

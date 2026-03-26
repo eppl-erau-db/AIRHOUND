@@ -1,0 +1,22 @@
+\begin{table}[htbp]
+\centering
+\caption{Hardware-in-the-loop test results across six configurations. Synthetic configurations use a mock detector at 30~FPS; camera configurations use RF-DETR TensorRT on the Jetson Orin with an Intel RealSense D455. Bridge denotes V4L2 bridge capture; Direct denotes native V4L2 capture integrated into the detector node.}
+\label{tab:hitl}
+\begin{tabular}{llrrrrr}
+\toprule
+Config & Input & Duration & Det.\ Rate & Latency & P95 & Dropouts \\
+ & & (s) & (\%) & (ms) & (ms) & \\
+\midrule
+\multicolumn{7}{l}{\textit{Synthetic (mock detector, simulated dropouts)}} \\
+Sim~A   & Mock 30~Hz     &  82.4 & 22.9 & ---   & --- & 4  \\
+Sim~B   & Mock 30~Hz     & 107.2 & 21.9 & ---   & --- & 10 \\
+Sim~C\textsuperscript{$\dagger$}  & Mock + PINN    & 179.9 & 21.0 & ---   & --- & 16 \\
+\midrule
+\multicolumn{7}{l}{\textit{Camera (RF-DETR TensorRT on Jetson Orin)}} \\
+Cam~640   & Bridge 640$\times$480  & 182.1 & 100.0 & 234.5 & 598.1 & 1  \\
+Cam~720   & Bridge 1280$\times$720 & 182.3 &  59.5 & 233.7 & 558.2 & 114 \\
+Cam~Direct & Direct 1280$\times$720 & 107.7 & 100.0 &  58.8 &  61.5 & 0 \\
+\bottomrule
+\multicolumn{7}{l}{\footnotesize\textsuperscript{$\dagger$}PINN fallback enabled; 77.5\% of tracking time in PINN mode.} \\
+\end{tabular}
+\end{table}

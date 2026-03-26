@@ -5,10 +5,14 @@ Performs object detection on RGB images and optionally fuses depth information
 from a RealSense D455 camera. Publishes Detection2DArray with depth embedded
 in the pose.position.z field for downstream 3D tracking.
 
+Supports direct V4L2 camera capture (camera_source='v4l2') to bypass
+ROS2 DDS serialization overhead for large Image messages.
+
 Author: Perception Lead
 """
 
 import time
+import threading
 from typing import Optional, Union
 
 import rclpy
@@ -103,6 +107,15 @@ class PerceptionNode(Node):
         self.declare_parameter('depth_min_range', 0.4)  # Minimum valid depth in meters
         self.declare_parameter('depth_max_range', 6.0)  # Maximum valid depth in meters
 
+        # V4L2 direct capture params (bypasses ROS2 DDS serialization)
+        self.declare_parameter('camera_source', 'topic')  # 'topic' or 'v4l2'
+        self.declare_parameter('v4l2_device', '/dev/video2')
+        from rcl_interfaces.msg import ParameterDescriptor as PD
+        dyn = PD(dynamic_typing=True)
+        self.declare_parameter('v4l2_width', 640, dyn)
+        self.declare_parameter('v4l2_height', 480, dyn)
+        self.declare_parameter('v4l2_fps', 15.0, dyn)
+
         # ==================== GET PARAMETERS ====================
         input_topic = self.get_parameter('input_image_topic').get_parameter_value().string_value
         det_topic = self.get_parameter('output_detections_topic').get_parameter_value().string_value
@@ -111,12 +124,15 @@ class PerceptionNode(Node):
         use_compressed = self.get_parameter('use_compressed').get_parameter_value().bool_value
         cam_info_topic = self.get_parameter('camera_info_topic').get_parameter_value().string_value
 
+        # Camera source
+        self.camera_source = self.get_parameter('camera_source').get_parameter_value().string_value
+
         # Depth params
         self.enable_depth = self.get_parameter('enable_depth').get_parameter_value().bool_value
         depth_topic = self.get_parameter('depth_image_topic').get_parameter_value().string_value
         self.depth_scale = self.get_parameter('depth_scale').get_parameter_value().double_value
         self.depth_window_size = self.get_parameter('depth_window_size').get_parameter_value().integer_value
-        
+
         # Depth quality filtering ranges
         self.depth_min_range = self.get_parameter('depth_min_range').get_parameter_value().double_value
         self.depth_max_range = self.get_parameter('depth_max_range').get_parameter_value().double_value
@@ -129,35 +145,42 @@ class PerceptionNode(Node):
         )
         qos_default = QoSProfile(depth=10)
 
-        # ==================== SUBSCRIBERS ====================
-        # RGB image subscriber
-        if use_compressed:
-            self.image_sub = self.create_subscription(
-                CompressedImage,
-                input_topic + '/compressed',
-                self.on_image_compressed,
-                qos_sensor
-            )
-        else:
-            self.image_sub = self.create_subscription(
-                Image,
-                input_topic,
-                self.on_image,
-                qos_sensor
-            )
-
-        # Camera info subscriber
-        self.camera_info_sub = self.create_subscription(
-            CameraInfo,
-            cam_info_topic,
-            self.on_camera_info,
-            qos_sensor
-        )
-
-        # Depth image subscriber (if enabled)
+        # ==================== SUBSCRIBERS / V4L2 CAPTURE ====================
         self.latest_depth: Optional[np.ndarray] = None
         self.depth_stamp: Optional[RclTime] = None
-        if self.enable_depth:
+        self._v4l2_cap = None
+        self._v4l2_running = False
+
+        if self.camera_source == 'v4l2':
+            # Direct V4L2 capture — bypass ROS2 DDS image transport entirely
+            self._setup_v4l2_capture(cam_info_topic, qos_default)
+        else:
+            # Standard ROS2 topic subscription
+            if use_compressed:
+                self.image_sub = self.create_subscription(
+                    CompressedImage,
+                    input_topic + '/compressed',
+                    self.on_image_compressed,
+                    qos_sensor
+                )
+            else:
+                self.image_sub = self.create_subscription(
+                    Image,
+                    input_topic,
+                    self.on_image,
+                    qos_sensor
+                )
+
+            # Camera info subscriber
+            self.camera_info_sub = self.create_subscription(
+                CameraInfo,
+                cam_info_topic,
+                self.on_camera_info,
+                qos_sensor
+            )
+
+        # Depth image subscriber (if enabled and not V4L2)
+        if self.enable_depth and self.camera_source != 'v4l2':
             self.depth_sub = self.create_subscription(
                 Image,
                 depth_topic,
@@ -168,7 +191,8 @@ class PerceptionNode(Node):
             self.get_logger().info(f"Depth range filter: {self.depth_min_range:.2f}m - {self.depth_max_range:.2f}m")
         else:
             self.depth_sub = None
-            self.get_logger().info("Depth integration DISABLED")
+            if self.camera_source != 'v4l2':
+                self.get_logger().info("Depth integration DISABLED")
 
         # ==================== PUBLISHERS ====================
         self.det_pub = self.create_publisher(Detection2DArray, det_topic, qos_default)
@@ -182,20 +206,118 @@ class PerceptionNode(Node):
         self.last_pub_time: Optional[float] = None
         self.last_image_stamp_ns: Optional[int] = None
         self.bridge = CvBridge()
-        self.cam_info: Optional[CameraInfo] = None
+        if self.camera_source != 'v4l2':
+            self.cam_info: Optional[CameraInfo] = None
         self.depth_received_count = 0
         self.depth_valid_count = 0  # Count of detections with valid depth in last frame
         self.depth_total_count = 0  # Total detections in last frame
 
-        # Load detector
+        # Load detector (must happen before V4L2 thread starts)
         self.detector = self._load_detector()
+
+        # Start V4L2 capture thread now that detector is loaded
+        if self.camera_source == 'v4l2' and self._v4l2_cap is not None:
+            self._v4l2_running = True
+            self._v4l2_thread = threading.Thread(target=self._v4l2_capture_loop, daemon=True)
+            self._v4l2_thread.start()
 
         # FPS timer
         self.fps_timer = self.create_timer(1.0, self.publish_fps)
 
         self.get_logger().info(
-            f"PerceptionNode started. RGB: {input_topic}, Detections: {det_topic}"
+            f"PerceptionNode started. Source: {self.camera_source}, Detections: {det_topic}"
         )
+
+    # ==================== V4L2 DIRECT CAPTURE ====================
+
+    def _setup_v4l2_capture(self, cam_info_topic: str, qos):
+        """Open V4L2 camera and start threaded capture loop."""
+        import sys
+
+        device = self.get_parameter('v4l2_device').get_parameter_value().string_value
+        width = int(self.get_parameter('v4l2_width').value)
+        height = int(self.get_parameter('v4l2_height').value)
+        fps = float(self.get_parameter('v4l2_fps').value)
+
+        cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
+        if not cap.isOpened():
+            try:
+                cap = cv2.VideoCapture(int(device), cv2.CAP_V4L2)
+            except ValueError:
+                pass
+        if not cap.isOpened():
+            self.get_logger().error(f'V4L2: Failed to open camera: {device}')
+            sys.exit(1)
+
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        cap.set(cv2.CAP_PROP_FPS, fps)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        actual_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        actual_fps = cap.get(cv2.CAP_PROP_FPS)
+        self.get_logger().info(
+            f'V4L2 camera opened: {device} @ {actual_w}x{actual_h} {actual_fps:.1f}fps')
+
+        self._v4l2_cap = cap
+
+        # Build and publish static CameraInfo (D455 approximate intrinsics)
+        self.cam_info = CameraInfo()
+        self.cam_info.header.frame_id = self.frame_id
+        self.cam_info.width = actual_w
+        self.cam_info.height = actual_h
+        self.cam_info.distortion_model = 'plumb_bob'
+        fx = 383.0 * (actual_w / 640.0)
+        fy = 383.0 * (actual_h / 480.0)
+        cx = actual_w / 2.0
+        cy = actual_h / 2.0
+        self.cam_info.k = [fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0]
+        self.cam_info.d = [0.0, 0.0, 0.0, 0.0, 0.0]
+        self.cam_info.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+        self.cam_info.p = [fx, 0.0, cx, 0.0, 0.0, fy, cy, 0.0, 0.0, 0.0, 1.0, 0.0]
+
+        self._cam_info_pub = self.create_publisher(CameraInfo, cam_info_topic, qos)
+        self._v4l2_frame_count = 0
+        # Thread started later in __init__ after detector is loaded
+
+    def _v4l2_capture_loop(self):
+        """Capture frames from V4L2 and run detection directly — no DDS overhead."""
+        while self._v4l2_running:
+            ret, frame = self._v4l2_cap.read()
+            if not ret:
+                continue
+
+            now = self.get_clock().now()
+
+            # Publish CameraInfo
+            self.cam_info.header.stamp = now.to_msg()
+            self._cam_info_pub.publish(self.cam_info)
+
+            # Run detection directly on the captured frame
+            det_array, target_3d_msg = self._process_detections(frame, now)
+            self.det_pub.publish(det_array)
+
+            if target_3d_msg is not None:
+                self.target_3d_pub.publish(target_3d_msg)
+
+            # Latency = just inference time (no transport delay)
+            end = self.get_clock().now()
+            now_ns = now.seconds_nanoseconds()
+            end_ns = end.seconds_nanoseconds()
+            latency_ms = float(
+                (end_ns[0] - now_ns[0]) * 1000.0 + (end_ns[1] - now_ns[1]) / 1e6
+            )
+            self.lat_pub.publish(Float32(data=latency_ms))
+
+            # Depth not available via V4L2 (no depth stream)
+            self.depth_status_pub.publish(Float32(data=0.0))
+            self.depth_quality_pub.publish(Float32(data=0.0))
+
+            self.last_pub_time = time.time()
+            self._v4l2_frame_count += 1
+            if self._v4l2_frame_count % 300 == 0:
+                self.get_logger().info(f'V4L2 frame {self._v4l2_frame_count}')
 
     # ==================== DETECTOR LOADING ====================
 
@@ -577,6 +699,15 @@ class PerceptionNode(Node):
         dt = max(1e-6, time.time() - self.last_pub_time)
         fps = float(1.0 / dt)
         self.fps_pub.publish(Float32(data=fps))
+
+    def destroy_node(self):
+        # Stop V4L2 capture thread before destroying node
+        self._v4l2_running = False
+        if hasattr(self, '_v4l2_thread') and self._v4l2_thread.is_alive():
+            self._v4l2_thread.join(timeout=2.0)
+        if self._v4l2_cap is not None:
+            self._v4l2_cap.release()
+        super().destroy_node()
 
 
 def main(args=None):
