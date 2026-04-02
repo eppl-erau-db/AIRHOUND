@@ -261,18 +261,196 @@ These results inform two key architectural decisions:
 \section{Physics-Informed Trajectory Prediction}
 \label{sec:pinn}
 
-% TODO [Tracking team]: Write this section.
-%
-% Owner: Tracking team (per CONTRIBUTING.md)
-%
-% What to cover:
-%   - PINN architecture (MLP, input/output dimensions)
-%   - Physics-informed loss (velocity constraint, lambda weighting)
-%   - Training data (SITL trajectories, data format)
-%   - Deployment as ROS 2 node, dropout recovery behavior
-%   - ONNX/PyTorch inference backends
-%
-% See CONTRIBUTING.md for LaTeX tips and git workflow.
+When a detection dropout begins, the Kalman filter's constant-velocity
+extrapolation diverges progressively from the true trajectory; a target
+executing a banked turn or deceleration will be several meters from the
+Kalman prediction within one to two seconds. To bridge these intervals, AIRHOUND
+integrates a physics-informed neural network that replaces the Kalman
+extrapolation as the source of tracking setpoints during dropout.
+The PINN is designed around two constraints imposed by the deployment context:
+inference must complete within the 33~ms budget of the 30~Hz control loop on
+the Jetson Orin, and predicted trajectories must remain within the target
+drone's physical flight envelope regardless of how many autoregressive steps
+are chained together.
+
+\subsection{Network Architecture}
+\label{sec:pinn_arch}
+
+The PINN is a fully-connected multi-layer perceptron (MLP) that maps the
+current 6-state estimate together with a prediction horizon to a future
+state:
+\begin{equation}
+    f_\theta : \bigl[\mathbf{x},\,\mathbf{v},\,\Delta t\bigr] \in \mathbb{R}^7
+               \;\mapsto\;
+               \bigl[\mathbf{x}',\,\mathbf{v}'\bigr] \in \mathbb{R}^6
+\end{equation}
+where $\mathbf{x} = [x,y,z]^\top$ is the target's 3D position expressed in the
+camera optical frame (X right, Y down, Z forward/depth), $\mathbf{v} =
+[v_x,v_y,v_z]^\top$ is the velocity vector from the Kalman filter, and $\Delta
+t$ is the requested prediction horizon in seconds.
+The output $[\mathbf{x}',\mathbf{v}']$ is the predicted position and velocity
+at time $t + \Delta t$.
+
+The architecture consists of three hidden layers of 128 units each with ReLU
+activations, giving a 7--128--128--128--6 topology with approximately 66\,k
+trainable parameters.
+Weights are initialized with Xavier uniform initialization for training
+stability~\cite{glorot2010}.
+An MLP is deliberately preferred over recurrent architectures: the absence of
+hidden state eliminates the need for state-reset logic on detection recovery,
+and the small parameter count keeps TensorRT-compiled inference below 1~ms on
+the Jetson Orin.
+All inputs and outputs are standardized channel-wise to zero mean and unit
+variance using statistics computed from the full training corpus and saved
+alongside the model weights for consistent normalization at inference time.
+The full architecture is illustrated in Figure~\ref{fig:pinn_arch}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{pinn_architecture.pdf}
+    \caption{PINN architecture. The 7-dimensional input (position, velocity, and
+    prediction horizon $\Delta t$) passes through three hidden layers of 128 ReLU
+    units before producing a 6-dimensional predicted state. During training a
+    physics penalty enforces $\|\mathbf{v}'\| \leq 10$~m/s on the output
+    velocities. In deployment (dropout mode) the predicted state is fed back
+    autoregressively as the next input at 30~Hz.}
+    \label{fig:pinn_arch}
+\end{figure}
+
+\subsection{Physics-Informed Training Loss}
+\label{sec:pinn_loss}
+
+The model is trained by minimizing a composite loss that combines a
+supervised data term with a physics constraint penalty:
+\begin{equation}
+    \mathcal{L}
+        = \underbrace{\mathcal{L}_{\mathrm{data}}}_{\text{MSE}}
+        + \lambda\;\underbrace{\mathcal{L}_{\mathrm{physics}}}_{\text{velocity bound}}
+    \label{eq:total_loss}
+\end{equation}
+$\mathcal{L}_{\mathrm{data}}$ is the mean squared error between the predicted
+and ground-truth next states, computed in normalized space.
+$\mathcal{L}_{\mathrm{physics}}$ enforces the target drone's operational
+flight-envelope constraint as a one-sided quadratic hinge penalty on the
+predicted speed:
+\begin{equation}
+    \mathcal{L}_{\mathrm{physics}}
+        = \frac{1}{N}\sum_{i=1}^{N}
+          \max\!\bigl(0,\;\|\mathbf{v}'_i\| - v_{\max}\bigr)^{2}
+    \label{eq:phys_loss}
+\end{equation}
+The physics loss is evaluated in physical (denormalized) units so that
+$v_{\max} = 10$~m/s applies directly to predicted velocities in metres per
+second.
+The hinge formulation is intentional: the penalty is zero everywhere within
+the feasible velocity regime, so the physics term does not compete with the
+data term during normal training; it activates only when predictions reach
+physically implausible speeds.
+The weighting $\lambda = 0.1$ is chosen to allow tight data fitting while
+strongly penalizing constraint violations.
+
+The physics constraint becomes critical during autoregressive deployment.
+At inference the PINN is applied iteratively---the predicted state at step
+$k$ is fed back as the input state at step $k{+}1$---so small velocity
+errors compound over successive steps.
+A pure data-driven network trained without the velocity bound can produce
+predictions that accelerate without limit across a multi-second dropout; the
+hinge penalty prevents this by ensuring that no individual prediction step
+can push the velocity above the envelope bound, bounding the error growth
+of the autoregressive chain.
+
+\subsection{Training Configuration and Data}
+\label{sec:pinn_data}
+
+Training trajectories are extracted from PX4 SITL simulations (Gazebo,
+X500 quadrotor model) recorded during closed-loop pursuit runs.
+The dataset is constructed by building all state-transition pairs
+$(s_i, \Delta t_{ij}, s_j)$ from each trajectory where $s = [x,y,z,
+v_x,v_y,v_z]^\top$ and the time separation $\Delta t_{ij} \in
+[0.03,\,1.0]$~s.
+Sampling over a range of horizons rather than a fixed step teaches the
+network to predict accurately at the 0.1~s deployment horizon while
+remaining well-conditioned at longer horizons that may arise during
+extended dropout.
+Velocities are computed by central finite differences on 30~Hz position
+sequences, with a moving-average window applied to suppress measurement
+noise.
+Samples with depth outside the D455 reliable range (0.4--6.0~m) or with
+computed speed exceeding $v_{\max}$ are discarded as likely sensor
+artifacts.
+The dataset covers straight-flight segments, banked turns, and
+approach/depart maneuvers to ensure generalization across the target's
+operational maneuvering envelope.
+
+The model is trained for 200 epochs with the Adam optimizer
+($\mathrm{lr} = 1 \times 10^{-3}$, weight decay $1 \times 10^{-5}$),
+batch size 256, gradient clipping at max norm 1.0, and a
+\texttt{ReduceLROnPlateau} scheduler (factor 0.5, patience 20 epochs).
+Fifteen percent of the dataset is held out as a validation split.
+On the synthetic SITL dataset the trained model achieves a mean position
+prediction error of 22~cm with zero velocity-constraint violations on
+the validation set, confirming that the physics penalty successfully
+eliminates implausible predictions without degrading trajectory accuracy.
+
+\subsection{ROS~2 Deployment and Dropout Recovery}
+\label{sec:pinn_deploy}
+
+The trained model is deployed as \texttt{pinn\_prediction\_node} within
+the ROS~2 tracking stack.
+Three inference backends are supported at runtime via the
+\texttt{model\_path} parameter: a native PyTorch checkpoint
+(\texttt{.pth}) for development, an ONNX Runtime session (\texttt{.onnx})
+for cross-platform portability, and a TensorRT FP16 engine
+(\texttt{.engine}) for Jetson deployment.
+On the Jetson Orin the TensorRT backend achieves 0.28~ms per inference
+(3{,}045 inferences/s)---a 7$\times$ speedup over the ONNX Runtime
+path---consuming less than 1\% of the 33~ms control-loop budget and
+leaving the remaining budget entirely for the detector and Kalman update.
+
+The node's dropout-recovery logic operates as follows.
+It subscribes to \texttt{/tracking/kalman\_state}
+(\texttt{Float64MultiArray}, $[x,y,z,v_x,v_y,v_z]$), which carries the
+Kalman filter's latest smoothed state, and monitors the arrival time of
+each \texttt{/perception/target\_3d} detection message.
+When the interval since the last valid detection exceeds the
+\texttt{dropout\_timeout} threshold (default 0.1~s, approximately three
+missed frames at 30~Hz), PINN prediction mode activates:
+
+\begin{enumerate}
+    \item The most recent Kalman state seeds the first PINN inference
+          with $\Delta t = 0.1$~s.
+    \item The predicted state $[\mathbf{x}',\mathbf{v}']$ is published
+          on \texttt{/tracking/pinn\_predicted} (\texttt{PointStamped})
+          for consumption by the yaw-control node, and simultaneously
+          stored as the input state for the next timer tick.
+    \item This autoregressive loop repeats at 30~Hz, advancing the
+          predicted trajectory one step per tick without any external
+          measurement input.
+    \item A Boolean flag on \texttt{/tracking/pinn\_active} allows
+          downstream nodes to distinguish PINN-predicted setpoints from
+          direct-detection setpoints.
+    \item On detection recovery the PINN deactivates immediately, the
+          autoregressive chain resets, and the Kalman filter
+          re-initializes from the next measured observation.
+    \item A configurable \texttt{max\_prediction\_time} caps the
+          total unsupported prediction duration, providing a safety
+          bound against indefinite extrapolation in loss-of-sight
+          scenarios.
+\end{enumerate}
+
+In hardware-in-the-loop testing (Sim~C, Table~\ref{tab:hitl}), the PINN
+maintains continuous yaw tracking commands through 16 intentional dropout
+events spanning up to 16.3~s each.
+Over the 180-second run, 77.5\% of total tracking time is spent in PINN
+prediction mode and less than 0.4\% in the zero-command state.
+By contrast, the configurations without the PINN (Sim~A and Sim~B) spend
+68--72\% of equivalent tracking time in the zero-command state, where the
+controller receives no targeting input.
+The PINN therefore functions as the primary mechanism through which the
+system sustains pursuit commands across multi-second detection gaps, and
+its bounded velocity predictions ensure that the yaw commands it generates
+remain physically consistent with the target's expected motion throughout
+the dropout interval.
 
 % ============================================================================
 \section{Anticipatory Control}
