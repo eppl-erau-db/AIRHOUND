@@ -456,19 +456,167 @@ the dropout interval.
 \section{Anticipatory Control}
 \label{sec:control}
 
-% TODO [Controls]: Write this section.
-%
-% Owner: Controls (per CONTRIBUTING.md)
-% Contributors: Tracking team
-%
-% What to cover:
-%   - Yaw control architecture (yaw_error_node, px4_converter)
-%   - Dropout recovery fallback hierarchy (PINN -> Kalman -> hold)
-%   - Altitude control (Stage 1, Z velocity setpoint) -- if validated
-%   - Pitch viewing (Stage 2) -- if validated
-%   - Safety limits and PID tuning
-%
-% See CONTRIBUTING.md for LaTeX tips and git workflow.
+The control layer translates the perception and tracking outputs into
+PX4-compatible flight commands.  Two ROS~2 nodes implement the full
+pipeline: a \emph{yaw error node} that selects the best available
+tracking source on every frame and computes a yaw rate command, and a
+\emph{PX4 converter node} that wraps that command into the offboard
+control messages expected by the PX4 autopilot~\cite{px4docs}.
+All tunable parameters are exposed through the unified
+\texttt{airhound.yaml} configuration file, enabling systematic
+ablation of each control component without code changes.
+
+\subsection{Yaw Error Computation}
+\label{sec:yaw_error}
+
+The yaw error node (\texttt{yaw\_error\_node}) subscribes to the
+detector's \texttt{/detections} topic and converts the highest-confidence
+bounding box centre into an angular yaw rate command.
+Given a detection with horizontal pixel coordinate~$u$ and camera
+intrinsic focal length~$f_x$, the angular error is
+\begin{equation}
+    e_{\psi} = \frac{u - c_x}{f_x}
+    \label{eq:yaw_err}
+\end{equation}
+where $c_x$ is the principal point.  Camera intrinsics are obtained at
+runtime from the \texttt{/camera/camera\_info} topic published by the
+RealSense D455 driver; if the topic is unavailable (e.g.\ in simulation),
+the node falls back to default values for the D455 at
+$1280\times720$~($f_x = 615$, $c_x = 640$).
+
+The angular error is passed through a proportional controller with a
+deadband of $\pm 0.01$~rad and a symmetric rate limit of
+$\pm 1.0$~rad/s:
+\begin{equation}
+    \dot{\psi}_{\mathrm{cmd}} =
+        \begin{cases}
+            0 & \text{if } |e_{\psi}| < 0.01 \\[2pt]
+            \mathrm{clip}(e_{\psi},\; {-1.0},\; {+1.0}) & \text{otherwise}
+        \end{cases}
+    \label{eq:yaw_rate}
+\end{equation}
+The deadband suppresses oscillatory commands when the target is
+near-centred, while the rate clamp maps to approximately
+$\pm 57.3$~\si{\degree/s}, within the safe yaw rate envelope of the
+X500 airframe.
+
+When a 3D position estimate is available from the Kalman filter
+(Section~\ref{sec:depth}) or the PINN (Section~\ref{sec:pinn}) instead
+of a raw pixel detection, the yaw command is computed as
+$e_{\psi} = \mathrm{atan2}(x,\,z)$ in the camera optical frame
+(X~right, Z~forward), providing a geometrically correct bearing
+estimate that accounts for target depth.
+
+\subsection{Dropout Recovery: Fallback Hierarchy}
+\label{sec:fallback}
+
+When no detection arrives on a given frame, the yaw error node evaluates
+a prioritized fallback hierarchy to select the best available tracking
+source.  The hierarchy is traversed top-to-bottom until a valid command
+is produced:
+
+\begin{enumerate}
+    \item \textbf{PINN prediction} (mode~3).  If the PINN node is
+          enabled (\texttt{enable\_pinn:\ true}) and the dropout
+          duration exceeds the activation threshold
+          (\texttt{dropout\_timeout}, default 0.1~s), the most recent
+          PINN-predicted 3D position from
+          \texttt{/tracking/pinn\_predicted} is converted to a yaw
+          command via the $\mathrm{atan2}(x,z)$ bearing computation.
+          The PINN provides bounded, physics-informed extrapolation
+          and is the preferred fallback for multi-second dropouts
+          (Section~\ref{sec:pinn}).
+
+    \item \textbf{Kalman extrapolation} (mode~2).  If the Kalman filter
+          is enabled and initialized, the constant-velocity prediction
+          $\hat{\mathbf{x}}(t + \Delta t) = \mathbf{x} + \mathbf{v}\,
+          \Delta t$ provides a short-term extrapolation of the target
+          position.  A Mahalanobis gating counter tracks consecutive
+          missed updates; after 30 misses (approximately 1~s at
+          30~Hz) the filter resets, preventing stale state from
+          producing divergent commands.
+
+    \item \textbf{Hold-then-decay} (modes~4/5).  When neither PINN nor
+          Kalman is available, the node holds the last commanded yaw
+          rate for a configurable \texttt{hold\_time} (default 0.3~s),
+          then linearly decays the command to zero over
+          \texttt{decay\_time} (default 1.0~s):
+          \begin{equation}
+              \dot{\psi}(t) =
+              \begin{cases}
+                  \dot{\psi}_{\mathrm{last}} & t_d \leq t_h \\[2pt]
+                  \displaystyle\frac{t_h + t_c - t_d}{t_c}\;\dot{\psi}_{\mathrm{last}}
+                                              & t_h < t_d \leq t_h + t_c \\[4pt]
+                  0                           & t_d > t_h + t_c
+              \end{cases}
+              \label{eq:hold_decay}
+          \end{equation}
+          where $t_d$ is the time since last detection, $t_h$ is the
+          hold time, and $t_c$ is the decay time.
+          This ensures that a momentary dropout does not immediately zero
+          the command (preserving tracking momentum), while guaranteeing
+          that stale commands are bounded and converge to zero within
+          1.3~s.
+
+    \item \textbf{Zero command} (mode~0).  If the decay interval has
+          elapsed or no detection has ever been received, the node
+          publishes a zero yaw rate.
+\end{enumerate}
+
+A numeric tracking mode is published on \texttt{/tracking/mode} at
+every frame (0=zero, 1=detection, 2=Kalman, 3=PINN, 4=hold, 5=decay),
+enabling offline analysis of the fallback behaviour across entire
+flight recordings.
+
+\subsection{PX4 Offboard Interface}
+\label{sec:px4_offboard}
+
+The PX4 converter node (\texttt{px4\_converter\_node}) bridges the
+ROS~2 control output to the PX4 autopilot via the Micro XRCE-DDS
+agent~\cite{eprosimadds} over Ethernet (Jetson 192.168.0.3
+$\leftrightarrow$ Pixhawk 192.168.0.4).  The node subscribes to
+\texttt{/yaw\_command} (\texttt{Float64}) and publishes three PX4
+topics at 10~Hz:
+
+\begin{itemize}
+    \item \texttt{/fmu/in/offboard\_control\_mode}: position-hold mode
+          with yaw override enabled.
+    \item \texttt{/fmu/in/trajectory\_setpoint}: hover at a fixed NED
+          position ($[0, 0, -5]$~m) with the yaw field set to the
+          current command.  The position-hold setpoint maintains
+          altitude and lateral position while the yaw command rotates
+          the vehicle to track the target.
+    \item \texttt{/fmu/in/vehicle\_command}: arming and mode-switch
+          commands during the startup sequence.
+\end{itemize}
+
+The node implements the PX4 offboard startup sequence: setpoint
+streaming begins immediately, the offboard mode command is issued after
+10 control ticks (1~s), and the arm command follows one tick later.
+This sequence satisfies the PX4 requirement that offboard setpoints must
+be received before the mode transition is accepted~\cite{px4docs}.
+
+A safety watchdog monitors the interval between incoming yaw commands.
+If no command is received for 5~s (configurable via
+\texttt{safety\_timeout}), the node logs a warning.
+In a flight configuration this timeout would trigger a failsafe
+transition to position-hold or return-to-launch; in the current HIL
+validation the PX4 failsafe handler manages this transition
+autonomously.
+
+\subsection{Design Scope and Limitations}
+\label{sec:control_scope}
+
+The current control implementation is restricted to single-axis (yaw)
+tracking.  Altitude hold and lateral position are delegated to the PX4
+position controller via the fixed hover setpoint.  This design decision
+reflects the project's validation strategy: yaw-only control isolates
+the perception-to-command pipeline from aerodynamic coupling effects,
+enabling clean evaluation of the detection and prediction subsystems.
+Extension to multi-axis control---altitude tracking via depth-derived
+$z$ velocity setpoints and pitch adjustment for viewing angle
+optimisation---is architecturally supported by the 3D Kalman state
+but is reserved for free-flight validation in future work.
 
 % ============================================================================
 \section{Experimental Setup}
