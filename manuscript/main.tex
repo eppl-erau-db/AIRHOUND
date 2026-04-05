@@ -622,6 +622,46 @@ but is reserved for free-flight validation in future work.
 \section{Experimental Setup}
 \label{sec:experiments}
 
+\subsection{Software in the Loop Environment}
+Initial validation of the middleware architecture and pursuit control hierarchy was conducted within a Software-in-the-Loop (SITL) environment. The simulation leverages Gazebo integrated with the PX4 autopilot flight stack, employing a standard X500 quadrotor airframe model to approximate the baseline flight dynamics of the physical platform.
+
+To isolate the performance of the ROS~2 middleware and the flight control logic from perception-induced latency, a mock detector node was implemented for baseline testing. Rather than running the full TensorRT inference pipeline, this mock detector publishes synthetic bounding box and tracking data at a deterministic rate. This isolation enables rigorous, repeatable validation of message serialization, tracking fallback modes, and command generation without the confounding variables of camera capture and neural network inference times.
+
+\subsection{Hardware Platform Checkout and Safety Protocols}
+
+Physical validation of the airframe and baseline flight dynamics was conducted within a designated outdoor flight cage. Initial checkout flights were constrained to manual radio-control (RC) to verify motor mapping, center of gravity, and the baseline stability of the X500 platform prior to the full integration of the perception payloads. 
+
+Strict safety protocols were established for the physical test space. These included a configured hardware emergency kill switch mapped to the pilot's RC transmitter, real-time battery voltage telemetry monitoring, and complete physical separation between the active flight envelope and operators via the flight cage netting. 
+
+While manual flights verified the physical readiness of the platform, the evaluation of the complete autonomous perception-to-control pipeline was isolated to the Hardware-in-the-Loop (HITL) architecture. This approach ensured the ROS~2 middleware and control logic could be rigorously validated and debugged safely before advancing to autonomous live-flight pursuit.
+
+\subsection{Flight Test Matrix}
+
+To systematically evaluate both the perception architecture and the tracking fallback hierarchy, a structured test matrix was executed. The matrix is divided into two primary evaluation tracks:
+\begin{itemize}
+    \item \textbf{Detector Degradation Matrix:} Evaluates the isolated perception performance of RF-DETR against a YOLOv8n baseline under synthetically applied environmental degradations, including maximum Gaussian noise, motion blur, and low-light severity.
+    \item \textbf{HITL System Validation:} Evaluates the end-to-end perception-to-control pipeline. This includes synthetic configurations (Sim~A, Sim~B, Sim~C) to exercise the predictive Physics-Informed Neural Network (PINN) and extended Kalman filters during programmed detection dropouts. It also includes camera configurations (Cam~640, Cam~720, Cam~Direct) to test the DDS middleware and V4L2 capture pipeline under real data loads.
+\end{itemize}
+
+\subsection{Data Logging and Analysis Pipeline}
+
+All HITL telemetry, perception outputs, and middleware diagnostics were recorded using the ROS~2 \texttt{rosbag2} utility. To handle the high throughput required by the image transport pipeline and high-frequency control loops without inducing secondary serialization bottlenecks, the logs were captured using the MCAP storage plugin. MCAP's chunked, compressed format ensures reliable recording of high-bandwidth topics while maintaining precise timestamp synchronization across the distributed nodes.
+
+\subsection{Evaluation Metrics}
+
+System performance is quantified using the following key metrics, selected to evaluate both perception accuracy and middleware efficiency:
+\begin{itemize}
+    \item \textbf{Inference Latency (ms):} The end-to-end time from image capture to the publication of the detection bounding box, measuring the efficiency of the transport pipeline (e.g., DDS vs. direct V4L2) and TensorRT inference.
+    \item \textbf{Detection Rate (\%):} The ratio of successfully published detections to expected frames, used to isolate serialization bottlenecks (dropouts) from detector failures.
+    \item \textbf{Tracking Mode Distribution (\%):} The percentage of total flight time spent in each tracking state (Direct Detection, PINN Prediction, Extrapolation, Hold, Decay).
+    \item \textbf{Mean Average Precision (mAP@0.5):} Utilized strictly for the isolated detector degradation matrix to quantify bounding box accuracy under adverse conditions.
+\end{itemize}
+
+\subsection{AI Tools Disclosure}
+During the preparation of this manuscript, the authors utilized GitHub Copilot to assist with code drafting and routine LaTeX formatting. Additionally, large language models (Claude, Gemini) were employed to refine the prose, improve structural flow, and ensure grammatical clarity within the text. The authors thoroughly reviewed, edited, and validated all AI-assisted content, and maintain full responsibility for the accuracy, originality, and integrity of the final publication.
+
+
+
 % TODO [Flight Ops + Middleware + QA]: Write this section.
 %
 % Owner: Flight Ops (per CONTRIBUTING.md)
