@@ -57,14 +57,14 @@
 
 \title{Predictive Target Pursuit for Autonomous UAVs using RF-DETR with Depth-Aware State Estimation and Physics-Informed Trajectory Prediction}
 
-\author{}
+\author{Rylan Malarchick\textsuperscript{*}, Carmen Dimario, Enrique Amaya, Graysen Brinkman, \\ Sajid Berhane, Jose Castelblanco, Chirag Kumar \\[4pt] Embry-Riddle Aeronautical University, Daytona Beach, FL 32114, United States \\[2pt] \textsuperscript{*}Corresponding author: rylan1012@gmail.com}
 
 \date{}
 \maketitle
 
 % ============================================================================
 \begin{abstract}
-Autonomous UAV target pursuit requires robust detection, state estimation, and control under conditions where visual input degrades or disappears entirely. We present AIRHOUND, an onboard perception-to-control pipeline for single-target drone tracking that runs entirely on an NVIDIA Jetson Orin. The system integrates two detection architectures---RF-DETR (transformer-based) and YOLOv8n (CNN-based)---with Intel RealSense D455 stereo depth for 3D state estimation, a 6-state Kalman filter for temporal smoothing, and a physics-informed neural network (PINN) for trajectory prediction during detection dropout. We evaluate both detectors under four synthetic degradation types (Gaussian noise, low light, motion blur, partial occlusion) at five severity levels. RF-DETR retains 75\% of its clean-baseline mAP at maximum noise severity, compared to 33\% for YOLOv8n, a +39.8 percentage point advantage attributable to the transformer attention mechanism's ability to aggregate global context from uncorrupted image regions. Both architectures run above 25~FPS on the Jetson Orin after TensorRT FP16 conversion. The PINN enforces a velocity magnitude constraint ($\|\mathbf{v}\| \leq 10$~m/s) during training, preventing physically implausible extrapolation during multi-second dropouts. The complete pipeline is validated in PX4 hardware-in-the-loop configuration with closed-loop yaw tracking, achieving 58.8~ms mean inference latency on the Jetson Orin with TensorRT. All perception and tracking components are modular, configurable at runtime via a single YAML file, and communicate over standard ROS~2 interfaces.
+Autonomous UAV target pursuit requires robust detection, state estimation, and control under conditions where visual input degrades or disappears entirely. We present AIRHOUND, an onboard perception-to-control pipeline for single-target drone tracking that runs entirely on an NVIDIA Jetson Orin. The system integrates two detection architectures---RF-DETR (transformer-based) and YOLOv8n (CNN-based)---with Intel RealSense D455 stereo depth for 3D state estimation, a 6-state Kalman filter for temporal smoothing, and a physics-informed neural network (PINN) for trajectory prediction during detection dropout. We evaluate both detectors under four synthetic degradation types (Gaussian noise, low light, motion blur, partial occlusion) at five severity levels. RF-DETR retains 75\% of its clean-baseline mAP at maximum noise severity, compared to 33\% for YOLOv8n, a +39.8 percentage point advantage attributable to the transformer attention mechanism's ability to aggregate global context from uncorrupted image regions. RF-DETR achieves 15~FPS end-to-end on the Jetson Orin after TensorRT FP16 conversion, sufficient for the 10~Hz control loop. The PINN enforces a velocity magnitude constraint ($\|\mathbf{v}\| \leq 10$~m/s) during training, preventing physically implausible extrapolation during multi-second dropouts. The complete pipeline is validated in PX4 hardware-in-the-loop configuration with closed-loop yaw tracking, achieving 58.8~ms mean end-to-end detection latency on the Jetson Orin with TensorRT. All perception and tracking components are modular, configurable at runtime via a single YAML file, and communicate over standard ROS~2 interfaces.
 \end{abstract}
 
 \noindent\textbf{Keywords:} UAV target tracking, transformer object detection, physics-informed neural network, depth estimation, Kalman filter, ROS~2, edge computing, degradation robustness
@@ -84,10 +84,10 @@ This paper presents AIRHOUND, an integrated perception-to-control pipeline for a
     \item Depth-fused 3D state estimation using Intel RealSense D455 stereo depth with a 6-state Kalman filter, providing position and velocity estimates in the camera optical frame.
     \item A physics-informed neural network for trajectory prediction during detection dropout, trained with a velocity-bounded physics loss that prevents implausible extrapolation.
     \item A modular ROS~2 pipeline where all components (detector selection, Kalman filter, PINN, control parameters) are configurable at runtime via a single YAML file, enabling systematic ablation without code changes.
-    \item End-to-end validation in PX4 hardware-in-the-loop configuration with closed-loop yaw tracking on the NVIDIA Jetson Orin, demonstrating 58.8~ms mean inference latency and continuous tracking through multi-second detection dropouts.
+    \item End-to-end validation in PX4 hardware-in-the-loop configuration with closed-loop yaw tracking on the NVIDIA Jetson Orin, demonstrating 58.8~ms mean detection latency and continuous tracking through multi-second detection dropouts.
 \end{enumerate}
 
-The system runs entirely onboard, with both detectors exceeding 25~FPS after TensorRT conversion on the Jetson Orin (16~GB). The pipeline is designed for the SPIE DS112 track theme of machine learning from challenging data: the degradation evaluation directly characterizes how detection architecture choice affects tracking reliability when visual input quality cannot be guaranteed.
+The system runs entirely onboard, with the RF-DETR pipeline achieving 15~FPS end-to-end after TensorRT FP16 conversion on the Jetson Orin (16~GB). The pipeline is designed for the SPIE DS112 track theme of machine learning from challenging data: the degradation evaluation directly characterizes how detection architecture choice affects tracking reliability when visual input quality cannot be guaranteed.
 
 % ============================================================================
 \section{Related Work}
@@ -121,18 +121,91 @@ Most UAV tracking systems treat detection and control as independent modules wit
 \section{System Architecture}
 \label{sec:architecture}
 
-% TODO [Middleware + QA]: Write this section.
+The AIRHOUND system integrates perception, state estimation, and
+flight control into a modular ROS~2~\cite{ros2humble} pipeline
+deployed on an edge-class companion computer.  This section describes
+the hardware platform, the node-level software architecture, and the
+unified configuration mechanism that enables systematic ablation of
+each component.
+
+\subsection{Hardware Platform}
+\label{sec:hardware}
+
+The airframe is a Holybro X500 quadrotor equipped with three primary
+avionics components:
+\begin{itemize}
+    \item \textbf{Flight controller:} Auterion PX4 FMUv6X~\cite{px4docs} running the PX4 autopilot with a separate IO coprocessor for PWM output.  The FMU provides attitude control, state estimation, and the offboard control interface.
+    \item \textbf{Companion computer:} NVIDIA Jetson Orin (16~GB)~\cite{jetsonorin}, executing all perception, tracking, and control nodes.  The Jetson communicates with the FMU over a dedicated Ethernet link (Jetson 192.168.0.3 $\leftrightarrow$ Pixhawk 192.168.0.4) using the Micro XRCE-DDS bridge~\cite{eprosimadds}, which translates between ROS~2 DDS topics and PX4's internal uORB messaging.
+    \item \textbf{Camera:} Intel RealSense D455~\cite{realsensed455} stereo depth camera, providing synchronized RGB and depth streams at $1280\times720$ and 30~FPS over USB~3.0.
+\end{itemize}
+
+\subsection{Software Architecture}
+\label{sec:sw_arch}
+
+The pipeline is implemented as four ROS~2 Humble nodes connected by
+typed DDS topics.  Each node is a single-responsibility process that
+can be independently tested, profiled, or replaced:
+
+\begin{enumerate}
+    \item \textbf{Perception node} (\texttt{detector\_node}).  Captures RGB frames---either via ROS~2 image topic subscription or direct V4L2 system calls that bypass DDS serialization---and runs TensorRT~\cite{tensorrt} FP16 inference using the selected detector (RF-DETR~\cite{rfdetr2025} or YOLOv8n~\cite{ultralytics2023}).  When depth is enabled, the node fuses the D455 depth stream with each detection by extracting the median depth within a $5\times5$ pixel window around the bounding box centre, filtered to the camera's reliable range (0.4--6.0~m).  Outputs: \texttt{/detections} (\texttt{Detection2DArray}), \texttt{/perception/target\_3d} (\texttt{PointStamped}).
+
+    \item \textbf{Tracking node} (\texttt{yaw\_error\_node}).  Subscribes to \texttt{/detections} and, when available, the PINN and Kalman state topics.  On each frame it selects the best tracking source via the fallback hierarchy described in Section~\ref{sec:fallback} and computes a yaw rate command using the pixel-to-angle conversion of Section~\ref{sec:yaw_error}.  An integrated 6-state constant-velocity Kalman filter~\cite{kalmanfilter1960} with Mahalanobis gating ($\chi^2$ threshold 3.0, reset after 30 consecutive misses) smooths 3D position estimates when depth is available.  Outputs: \texttt{/yaw\_command} (\texttt{Float64}), \texttt{/tracking/mode} (\texttt{Float64}).
+
+    \item \textbf{PINN prediction node} (\texttt{pinn\_prediction\_node}).  A physics-informed neural network~\cite{raissi2019pinn} trained on SITL trajectory data (Section~\ref{sec:pinn}).  During detection dropout the node autoregressively predicts the target's future state at 0.1~s horizons, publishing on \texttt{/tracking/pinn\_predicted} (\texttt{PointStamped}) and \texttt{/tracking/pinn\_active} (\texttt{Bool}).  After TensorRT conversion the PINN runs in 0.28~ms per inference on the Jetson GPU.
+
+    \item \textbf{PX4 converter node} (\texttt{px4\_converter\_node}).  Bridges the ROS~2 domain and the PX4 autopilot.  At 10~Hz it publishes \texttt{OffboardControlMode}, \texttt{TrajectorySetpoint} (position hold at NED $[0,0,-5]$~m with yaw override), and \texttt{VehicleCommand} messages to the \texttt{/fmu/in/*} topics.  An automatic startup sequence sends 10 setpoints before commanding offboard mode and arming.  A safety watchdog triggers a warning after 5~s without a valid yaw command.
+\end{enumerate}
+
+\noindent
+In SITL mode, a \emph{mock detector} replaces the perception node,
+generating synthetic detections at 30~Hz with configurable target
+motion (circular, sinusoidal, figure-eight) and optional Gaussian
+pixel noise.  The Gazebo~\cite{gazebo2004} simulator provides the
+flight dynamics model for the X500 airframe.
+
+\subsection{Topic Data Flow}
+\label{sec:dataflow}
+
+The end-to-end data flow from sensor to actuator proceeds as follows:
 %
-% Owner: Middleware + QA (per CONTRIBUTING.md)
-% Contributors: Perception, Tracking, Controls
+\begin{equation*}
+\underbrace{\text{D455}}_{\text{sensor}}
+\;\xrightarrow{\text{V4L2/DDS}}\;
+\underbrace{\text{detector}}_{\text{TensorRT}}
+\;\xrightarrow{\texttt{/detections}}\;
+\underbrace{\text{tracker}}_{\text{Kalman+PINN}}
+\;\xrightarrow{\texttt{/yaw\_command}}\;
+\underbrace{\text{PX4 conv.}}_{\text{offboard}}
+\;\xrightarrow{\text{XRCE-DDS}}\;
+\underbrace{\text{FMU}}_{\text{PX4}}
+\end{equation*}
 %
-% What to cover:
-%   - Hardware platform (UAV, Jetson Orin, D455, PX4)
-%   - ROS 2 node graph and topic interfaces
-%   - System architecture figure (Figure 1)
-%   - Configuration/model selection via airhound.yaml
-%
-% See CONTRIBUTING.md for LaTeX tips, figure inclusion, and git workflow.
+All inter-node communication uses ROS~2 DDS with best-effort QoS,
+prioritizing low latency over guaranteed delivery.  History depths
+range from 1 (PX4 bridge topics) to 5--10 (sensor and inter-node
+topics) depending on tolerance for message loss.
+The sole exception is the camera image transport path: at
+$1280\times720$, each uncompressed BGR8 frame is 2.7~MB, which
+saturates the DDS serialization pipeline in Python and limits
+throughput to approximately 1.5~FPS.  The V4L2 direct capture path
+(Section~\ref{sec:experiments}) bypasses this bottleneck entirely,
+restoring the full TensorRT-limited throughput of 15~FPS.
+
+\subsection{Unified Configuration}
+\label{sec:config}
+
+All tunable parameters---detector type and model path, camera
+resolution, Kalman filter noise covariances, PINN model and
+prediction horizon, yaw rate limits, PX4 hover setpoint, and SITL
+mock-detector motion profiles---are consolidated in a single YAML
+configuration file (\texttt{airhound.yaml}).  A mode selector
+(\texttt{sim} or \texttt{flight}) determines which nodes and
+parameter subsets are active, and a top-level launch script
+(\texttt{launch\_airhound.sh}) orchestrates the Micro XRCE-DDS
+agent, PX4 SITL (if applicable), and the ROS~2 launch graph in a
+single command.  This design enables systematic ablation of any
+component---swapping detectors, disabling the PINN, or adjusting
+control gains---without modifying source code.
 
 % ============================================================================
 \section{RF-DETR Detection and Degradation Robustness}
@@ -167,7 +240,7 @@ For real-time inference on the NVIDIA Jetson Orin (16~GB)~\cite{jetsonorin}, bot
     \item ONNX $\rightarrow$ TensorRT engine via \texttt{trtexec} with FP16 and 4~GB workspace
 \end{enumerate}
 %
-The resulting RF-DETR TensorRT engine is 57~MB and achieves approximately 25~FPS on the Jetson Orin, compared to approximately 1~FPS for the ONNX model on CPU. YOLOv8n TensorRT achieves approximately 30~FPS at $640 \times 640$ input resolution. Both frame rates exceed the 30~Hz camera capture rate, ensuring real-time operation.
+The resulting RF-DETR TensorRT engine is 57~MB.  End-to-end pipeline throughput---including V4L2 capture and pre/post-processing---is approximately 15~FPS at $1280\times720$ on the Jetson Orin, compared to approximately 1~FPS for the ONNX model on CPU.  YOLOv8n TensorRT achieves higher throughput at its native $640 \times 640$ input resolution.  Both engines are sufficient for closed-loop control at the 10~Hz offboard setpoint rate required by PX4.
 
 \subsection{Synthetic Degradation Pipeline}
 \label{sec:degradation_pipeline}
@@ -289,7 +362,7 @@ Assuming constant velocity over a short sampling interval $\Delta t$, the transi
 \mathbf{x}_k + \mathbf{w}_k
 \label{eq:kalman_transition}
 \end{equation}
-where $\mathbf{w}_k$ is the process noise. In the current implementation, the process covariance is diagonal and scales with $\Delta t$, with separate tunable terms for position and velocity noise. Since the perception stack directly observes only position, the measurement model is
+where $\mathbf{w}_k$ is the process noise. In the current implementation, the process covariance is diagonal with position entries scaling as $\Delta t^2$ and velocity entries scaling as $\Delta t$, reflecting higher uncertainty growth in position during longer prediction intervals. Since the perception stack directly observes only position, the measurement model is
 \begin{equation}
 \mathbf{z}_k =
 \begin{bmatrix}
@@ -371,7 +444,7 @@ The output $[\mathbf{x}',\mathbf{v}']$ is the predicted position and velocity
 at time $t + \Delta t$.
 
 The architecture consists of three hidden layers of 128 units each with ReLU
-activations, giving a 7--128--128--128--6 topology with approximately 66\,k
+activations, giving a 7--128--128--128--6 topology with approximately 35\,k
 trainable parameters.
 Weights are initialized with Xavier uniform initialization for training
 stability~\cite{glorot2010}.
@@ -481,8 +554,8 @@ Three inference backends are supported at runtime via the
 (\texttt{.pth}) for development, an ONNX Runtime session (\texttt{.onnx})
 for cross-platform portability, and a TensorRT FP16 engine
 (\texttt{.engine}) for Jetson deployment.
-On the Jetson Orin the TensorRT backend achieves 0.28~ms per inference
-(3{,}045 inferences/s)---a 7$\times$ speedup over the ONNX Runtime
+On the Jetson Orin the TensorRT backend sustains 3{,}045 inferences/s
+(0.33~ms per call including memory transfer)---a 7$\times$ speedup over the ONNX Runtime
 path---consuming less than 1\% of the 33~ms control-loop budget and
 leaving the remaining budget entirely for the detector and Kalman update.
 
@@ -521,7 +594,7 @@ In hardware-in-the-loop testing (Sim~C, Table~\ref{tab:hitl}), the PINN
 maintains continuous yaw tracking commands through 16 intentional dropout
 events spanning up to 16.3~s each.
 Over the 180-second run, 77.5\% of total tracking time is spent in PINN
-prediction mode and less than 0.4\% in the zero-command state.
+prediction mode and only 0.4\% in the zero-command state.
 By contrast, the configurations without the PINN (Sim~A and Sim~B) spend
 68--72\% of equivalent tracking time in the zero-command state, where the
 controller receives no targeting input.
@@ -701,60 +774,75 @@ but is reserved for free-flight validation in future work.
 \section{Experimental Setup}
 \label{sec:experiments}
 
-\subsection{Software in the Loop Environment}
-Initial validation of the middleware architecture and pursuit control hierarchy was conducted within a Software-in-the-Loop (SITL) environment. The simulation leverages Gazebo integrated with the PX4 autopilot flight stack, employing a standard X500 quadrotor airframe model to approximate the baseline flight dynamics of the physical platform.
+\subsection{Software-in-the-Loop Environment}
 
-To isolate the performance of the ROS~2 middleware and the flight control logic from perception-induced latency, a mock detector node was implemented for baseline testing. Rather than running the full TensorRT inference pipeline, this mock detector publishes synthetic bounding box and tracking data at a deterministic rate. This isolation enables rigorous, repeatable validation of message serialization, tracking fallback modes, and command generation without the confounding variables of camera capture and neural network inference times.
+Initial validation of the middleware architecture and pursuit control
+hierarchy was conducted in a Software-in-the-Loop (SITL) environment
+using Gazebo~\cite{gazebo2004} integrated with the PX4 autopilot
+flight stack~\cite{px4docs}, employing a standard X500 quadrotor
+airframe model.  To isolate the ROS~2 middleware and control logic from
+perception-induced latency, a mock detector node publishes synthetic
+bounding box and tracking data at a deterministic 30~Hz rate.  This
+isolation enables repeatable validation of message serialization,
+tracking fallback mode transitions, and command generation without the
+confounding variables of camera capture and neural network inference.
 
-\subsection{Hardware Platform Checkout and Safety Protocols}
+\subsection{Hardware Platform and Safety Protocols}
 
-Physical validation of the airframe and baseline flight dynamics was conducted within a designated outdoor flight cage. Initial checkout flights were constrained to manual radio-control (RC) to verify motor mapping, center of gravity, and the baseline stability of the X500 platform prior to the full integration of the perception payloads. 
+Physical validation was conducted within a designated outdoor flight
+cage.  Initial checkout flights used manual radio-control (RC) to
+verify motor mapping, center of gravity, and baseline stability of the
+X500 platform prior to payload integration.  Safety protocols included
+a hardware emergency kill switch on the pilot's RC transmitter,
+real-time battery voltage telemetry, and physical separation between
+the flight envelope and operators via the cage netting.
 
-Strict safety protocols were established for the physical test space. These included a configured hardware emergency kill switch mapped to the pilot's RC transmitter, real-time battery voltage telemetry monitoring, and complete physical separation between the active flight envelope and operators via the flight cage netting. 
-
-While manual flights verified the physical readiness of the platform, the evaluation of the complete autonomous perception-to-control pipeline was isolated to the Hardware-in-the-Loop (HITL) architecture. This approach ensured the ROS~2 middleware and control logic could be rigorously validated and debugged safely before advancing to autonomous live-flight pursuit.
+The complete autonomous perception-to-control pipeline was evaluated
+using a Hardware-in-the-Loop (HITL) architecture: the NVIDIA Jetson
+Orin~\cite{jetsonorin} runs all perception, tracking, and control
+nodes while connected to a PX4 FMUv6X flight controller operating in
+HIL mode (simulated dynamics, real autopilot hardware).  The Intel
+RealSense D455~\cite{realsensed455} provides the camera feed, and all
+communication between the Jetson and FMU uses Ethernet via Micro
+XRCE-DDS~\cite{eprosimadds}.
 
 \subsection{Flight Test Matrix}
 
-To systematically evaluate both the perception architecture and the tracking fallback hierarchy, a structured test matrix was executed. The matrix is divided into two primary evaluation tracks:
+A structured test matrix evaluates both perception robustness and the
+end-to-end tracking pipeline:
 \begin{itemize}
-    \item \textbf{Detector Degradation Matrix:} Evaluates the isolated perception performance of RF-DETR against a YOLOv8n baseline under synthetically applied environmental degradations, including maximum Gaussian noise, motion blur, and low-light severity.
-    \item \textbf{HITL System Validation:} Evaluates the end-to-end perception-to-control pipeline. This includes synthetic configurations (Sim~A, Sim~B, Sim~C) to exercise the predictive Physics-Informed Neural Network (PINN) and extended Kalman filters during programmed detection dropouts. It also includes camera configurations (Cam~640, Cam~720, Cam~Direct) to test the DDS middleware and V4L2 capture pipeline under real data loads.
+    \item \textbf{Detector Degradation Matrix:} Evaluates RF-DETR~\cite{rfdetr2025} against a YOLOv8n~\cite{ultralytics2023} baseline on 1{,}983 images under four synthetically applied degradations (Gaussian noise, motion blur, low-light, occlusion) at five severity levels (0.0--1.0).
+    \item \textbf{HITL System Validation:} Six configurations across two input modalities.  Three \emph{synthetic} configurations (Sim~A, Sim~B, Sim~C) exercise the PINN and Kalman fallback hierarchy during programmed detection dropouts at 30~Hz.  Three \emph{camera} configurations (640$\times$480 bridge, 1280$\times$720 bridge, 1280$\times$720 direct V4L2) test the DDS middleware and capture pipeline under real sensor loads with TensorRT~\cite{tensorrt} FP16 inference.
 \end{itemize}
 
-\subsection{Data Logging and Analysis Pipeline}
+\subsection{Data Logging and Analysis}
 
-All HITL telemetry, perception outputs, and middleware diagnostics were recorded using the ROS~2 \texttt{rosbag2} utility. To handle the high throughput required by the image transport pipeline and high-frequency control loops without inducing secondary serialization bottlenecks, the logs were captured using the MCAP storage plugin. MCAP's chunked, compressed format ensures reliable recording of high-bandwidth topics while maintaining precise timestamp synchronization across the distributed nodes.
+All HITL telemetry, perception outputs, and middleware diagnostics were
+recorded using the ROS~2~\cite{ros2humble} \texttt{rosbag2} utility
+with the MCAP storage plugin.  MCAP's chunked, compressed format
+handles the high throughput of the image transport pipeline (up to
+2.7~MB per uncompressed 1280$\times$720 BGR8 frame) and high-frequency
+control loops without inducing secondary serialization bottlenecks,
+while maintaining precise timestamp synchronization across the
+distributed node graph.
 
 \subsection{Evaluation Metrics}
 
-System performance is quantified using the following key metrics, selected to evaluate both perception accuracy and middleware efficiency:
+System performance is quantified using the following metrics:
 \begin{itemize}
-    \item \textbf{Inference Latency (ms):} The end-to-end time from image capture to the publication of the detection bounding box, measuring the efficiency of the transport pipeline (e.g., DDS vs. direct V4L2) and TensorRT inference.
-    \item \textbf{Detection Rate (\%):} The ratio of successfully published detections to expected frames, used to isolate serialization bottlenecks (dropouts) from detector failures.
-    \item \textbf{Tracking Mode Distribution (\%):} The percentage of total flight time spent in each tracking state (Direct Detection, PINN Prediction, Extrapolation, Hold, Decay).
-    \item \textbf{Mean Average Precision (mAP@0.5):} Utilized strictly for the isolated detector degradation matrix to quantify bounding box accuracy under adverse conditions.
+    \item \textbf{Inference Latency (ms):} End-to-end time from image capture to detection publication, measuring the combined cost of the transport pipeline and TensorRT inference.
+    \item \textbf{Detection Rate (\%):} Ratio of successfully published detections to expected frames, isolating serialization-induced dropouts from detector failures.
+    \item \textbf{Tracking Mode Distribution (\%):} Fraction of flight time in each tracking state (Detection, Kalman, PINN, Hold, Decay, Zero), quantifying fallback utilization.
+    \item \textbf{mAP@0.5:} Used for the isolated detector degradation matrix to quantify bounding box accuracy under adverse conditions.
 \end{itemize}
 
 \subsection{AI Tools Disclosure}
-During the preparation of this manuscript, the authors utilized GitHub Copilot to assist with code drafting and routine LaTeX formatting. Additionally, large language models (Claude, Gemini) were employed to refine the prose, improve structural flow, and ensure grammatical clarity within the text. The authors thoroughly reviewed, edited, and validated all AI-assisted content, and maintain full responsibility for the accuracy, originality, and integrity of the final publication.
 
-
-
-% TODO [Flight Ops + Middleware + QA]: Write this section.
-%
-% Owner: Flight Ops (per CONTRIBUTING.md)
-% Contributors: Middleware + QA
-%
-% What to cover:
-%   - SITL environment (PX4 Gazebo, X500 model, mock detector)
-%   - Hardware flight test setup (flight cage, target, safety protocols)
-%   - Flight test matrix (scenarios, both detectors)
-%   - Data collection (rosbag topics, MCAP format, analysis pipeline)
-%   - Evaluation metrics
-%   - AI tools disclosure (GitHub Copilot, Claude for editing)
-%
-% See CONTRIBUTING.md for LaTeX tips and git workflow.
+During the preparation of this work, the authors used GitHub Copilot
+for code drafting and large language models (Claude, Gemini) for prose
+refinement.  All AI-assisted content was reviewed, edited, and
+validated by the authors, who maintain full responsibility for the
+accuracy and integrity of the final publication.
 
 % ============================================================================
 \section{Results}
@@ -774,12 +862,12 @@ The complete perception-to-control pipeline is validated in hardware-in-the-loop
 
 The camera configurations reveal the critical impact of the image transport pipeline on end-to-end latency. Publishing 2.7~MB uncompressed frames (1280$\times$720 BGR8) through ROS~2 DDS middleware limits effective throughput to approximately 1.5~FPS in Python, despite the camera capturing at 30~FPS. The V4L2 bridge configurations (Cam~640 and Cam~720) exhibit 234~ms mean latency with high variance (P95: 558--598~ms) due to DDS serialization contention.
 
-By integrating V4L2 capture directly into the detector node---bypassing DDS image serialization entirely---the Cam~Direct configuration achieves 58.8~ms mean latency (median 59.0~ms, P95: 61.5~ms), a 4$\times$ reduction from the bridge architecture. Figure~\ref{fig:hitl_latency} shows the resulting tight unimodal distribution, bounded solely by TensorRT inference time. This 10$\times$ reduction in latency variance is critical for real-time pursuit control, where consistent frame-to-frame timing prevents oscillatory yaw commands.
+By integrating V4L2 capture directly into the detector node---bypassing DDS image serialization entirely---the Cam~Direct configuration achieves 58.8~ms mean latency (median 59.0~ms, P95: 61.5~ms), a 4$\times$ reduction from the bridge architecture. Figure~\ref{fig:hitl_latency} shows the resulting tight unimodal distribution, bounded by the combined cost of V4L2 capture and TensorRT inference. This 10$\times$ reduction in latency variance is critical for real-time pursuit control, where consistent frame-to-frame timing prevents oscillatory yaw commands.
 
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=0.75\textwidth]{hitl_latency_histogram.pdf}
-    \caption{Inference latency distribution for the direct V4L2 camera configuration on the Jetson Orin. Mean 58.8~ms, P95 61.5~ms---bounded by TensorRT inference time alone.}
+    \caption{End-to-end detection latency distribution for the direct V4L2 camera configuration on the Jetson Orin. Mean 58.8~ms, P95 61.5~ms---bounded by the combined cost of V4L2 capture and TensorRT inference.}
     \label{fig:hitl_latency}
 \end{figure}
 
@@ -798,7 +886,7 @@ The synthetic configurations intentionally introduce dropout periods to exercise
 
 \subsubsection{Tracking Mode Comparison}
 
-Figure~\ref{fig:hitl_mode_comparison} compares tracking mode breakdown across all six configurations. The camera configurations without PINN (Cam~640, Cam~720, Cam~Direct) rely on hold and decay modes during dropout, while the PINN-enabled synthetic configuration (Sim~C) demonstrates the predictive fallback operating as designed. The early synthetic configurations (Sim~A, Sim~B) spend the majority of time in zero mode, as neither PINN nor extended Kalman prediction was enabled.
+Figure~\ref{fig:hitl_mode_comparison} compares tracking mode breakdown across all six configurations. The camera configurations without PINN (Cam~640, Cam~720, Cam~Direct) rely on hold and decay modes during dropout, while the PINN-enabled synthetic configuration (Sim~C) demonstrates the predictive fallback operating as designed. The early synthetic configurations (Sim~A, Sim~B) spend the majority of time in zero mode (68--72\%): the Kalman filter bridges short dropouts (3.9--8.6\% of tracking time) but resets after 30 consecutive missed updates ($\approx$1~s), leaving multi-second gaps untracked without the PINN.
 
 \begin{figure}[htbp]
     \centering
@@ -830,7 +918,7 @@ The comparable performance of both architectures under motion blur is notable. B
 
 \subsection{HITL Validation and Capture Pipeline Effects}
 
-The HITL results highlight the importance of the capture pipeline in determining end-to-end system performance. The V4L2 bridge architecture serializes 2.7~MB BGR8 frames through ROS~2 DDS, introducing 234~ms mean latency with P95 exceeding 558~ms. By integrating V4L2 capture directly into the detector node, bypassing DDS image transport entirely, the Cam~Direct configuration reduces mean latency to 58.8~ms (P95: 61.5~ms)---a 4$\times$ improvement---and eliminates all detection dropouts at 1280$\times$720. This confirms that the RF-DETR TensorRT engine achieves approximately 15~FPS on the Jetson Orin with latency bounded solely by inference time, well within real-time control loop requirements. The bridge-induced dropouts in Cam~720 (59.5\% detection rate, 114 dropout events) were an artifact of the transport layer, not a limitation of the detector.
+The HITL results highlight the importance of the capture pipeline in determining end-to-end system performance. The V4L2 bridge architecture serializes 2.7~MB BGR8 frames through ROS~2 DDS, introducing 234~ms mean latency with P95 exceeding 558~ms. By integrating V4L2 capture directly into the detector node, bypassing DDS image transport entirely, the Cam~Direct configuration reduces mean latency to 58.8~ms (P95: 61.5~ms)---a 4$\times$ improvement---and eliminates all detection dropouts at 1280$\times$720. This confirms that the RF-DETR TensorRT engine achieves approximately 15~FPS on the Jetson Orin with latency bounded by V4L2 capture and inference rather than the transport layer, well within real-time control loop requirements. The bridge-induced dropouts in Cam~720 (59.5\% detection rate, 114 dropout events) were an artifact of the transport layer, not a limitation of the detector.
 
 \subsection{Predictive Tracking During Dropout}
 
@@ -846,11 +934,11 @@ Several limitations of the current evaluation should be noted. First, all HITL t
 
 We presented AIRHOUND, a modular perception-to-control pipeline for autonomous UAV target pursuit running on edge hardware. The system makes three contributions relevant to the DS112 track theme of machine learning from challenging data. First, RF-DETR demonstrates a substantial robustness advantage over YOLOv8n under Gaussian noise and low-light degradation (+39.8 and +39.4 percentage points at maximum severity respectively), while both architectures remain vulnerable to severe motion blur. Second, the physics-informed trajectory prediction network provides bounded extrapolation during detection dropout, maintaining continuous tracking commands through dropout intervals of up to 16.3~seconds in HITL testing. Third, the modular ROS~2 architecture enables systematic ablation of each component (detector, Kalman filter, PINN) through runtime configuration.
 
-Hardware-in-the-loop validation on the Jetson Orin with the Intel RealSense D455 confirms real-time performance: the RF-DETR TensorRT engine achieves 58.8~ms mean inference latency (P95: 61.5~ms) with 100\% detection rate and zero dropouts at 1280$\times$720 when using direct V4L2 capture, and the complete perception-to-control pipeline runs end-to-end with closed-loop yaw tracking through the PX4 flight controller. Future work includes free-flight validation, multi-axis control (altitude and pitch), PINN retraining on real flight trajectories, and multi-target tracking.
+Hardware-in-the-loop validation on the Jetson Orin with the Intel RealSense D455 confirms real-time performance: the RF-DETR TensorRT engine achieves 58.8~ms mean end-to-end detection latency (P95: 61.5~ms) with 100\% detection rate and zero dropouts at 1280$\times$720 when using direct V4L2 capture, and the complete perception-to-control pipeline runs end-to-end with closed-loop yaw tracking through the PX4 flight controller. Future work includes free-flight validation, multi-axis control (altitude and pitch), PINN retraining on real flight trajectories, and multi-target tracking.  A further direction is replacing the constant-velocity PINN with a social transformer architecture~\cite{giuliari2021transformer} that jointly reasons about pursuer and target state to produce interaction-aware trajectory predictions; such models have demonstrated strong performance in pedestrian settings and could extend to adversarial drone pursuit given suitable training data from multi-vehicle flight campaigns.
 
 % ============================================================================
 \section*{Acknowledgments}
-This work was conducted at the Engineering Physics Propulsion Lab (EPPL), Embry-Riddle Aeronautical University, under the direction of Dr.\ Sergey Drakunov.
+This work was conducted at the Engineering Physics Propulsion Lab (EPPL), Embry-Riddle Aeronautical University, under the direction of Dr.\ Sergey Drakunov.  Hardware development was supported by an Embry-Riddle Undergraduate Research (Spark) equipment grant.  Travel to the conference was funded by the SPIE Student Conference Support program and the Embry-Riddle Department of Physical Sciences Research Committee.
 
 % ============================================================================
 \bibliographystyle{unsrtnat}
