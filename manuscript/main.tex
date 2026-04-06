@@ -243,19 +243,98 @@ These results inform two key architectural decisions:
 \section{Depth Integration and 3D State Estimation}
 \label{sec:depth}
 
-% TODO [Tracking team]: Write this section.
-%
-% Owner: Tracking team (per CONTRIBUTING.md)
-% Contributors: Perception
-%
-% What to cover:
-%   - Depth extraction from D455 (median filter, valid range)
-%   - 3D projection via pinhole model
-%   - 6-state Kalman filter (state vector, motion model, measurement model)
-%   - Mahalanobis gating and filter reset
-%   - Depth quality monitoring topics
-%
-% See CONTRIBUTING.md for LaTeX tips and git workflow.
+The RF-DETR detector provides target localization in the image plane, but the downstream tracking and control layers require a metric estimate of target position. AIRHOUND therefore fuses RGB detections with depth measurements from the Intel RealSense D455~\cite{realsensed455}, allowing valid detections to be projected into 3D in the camera optical frame. These observations are then filtered by a constant-velocity 6-state Kalman filter, which produces a smoothed estimate of target position and velocity for short-horizon extrapolation and downstream PINN prediction.
+
+\subsection{Depth Extraction from the D455}
+\label{sec:depth_extraction}
+
+For each detection, the perception node samples the aligned depth image at the centre of the predicted bounding box. Because an individual stereo-depth pixel can be unstable near object boundaries or in weak-texture regions, AIRHOUND applies a small windowed median filter around the bounding-box centre rather than relying on a single raw sample. Only nonzero depth values are retained, and the median of the valid samples is used as the representative range for that detection.
+
+The D455 depth image is received as a 16-bit stream in millimetres and converted to metres using a scale factor of 0.001. To suppress invalid near-field and long-range measurements, the resulting depth is filtered by a valid operating interval of 0.4--6.0~m, consistent with the reliable range assumed elsewhere in the tracking stack. If no valid in-range value remains after this filtering step, the detection is treated as having no usable depth for 3D state estimation on that frame.
+
+\subsection{3D Projection via the Pinhole Model}
+\label{sec:depth_projection}
+
+Given a valid depth estimate, the 2D detection is lifted into 3D using the standard pinhole camera model. Let $(u,v)$ denote the bounding-box centre in pixels, let $(f_x,f_y,c_x,c_y)$ denote the camera intrinsics from the \texttt{/camera/camera\_info} topic, and let $z$ denote the filtered depth in metres. The corresponding 3D target position is computed as
+\begin{equation}
+x = \frac{(u-c_x)z}{f_x}, \qquad
+y = \frac{(v-c_y)z}{f_y}, \qquad
+z = z
+\label{eq:pinhole_projection}
+\end{equation}
+
+The resulting coordinates are expressed in the ROS optical frame convention, with $X$ to the right, $Y$ downward, and $Z$ forward. The best valid 3D observation is published on \texttt{/perception/target\_3d} as a \texttt{PointStamped}, providing a metric target measurement for the tracking layer.
+
+\subsection{Six-State Kalman Filter}
+\label{sec:kalman_formulation}
+
+The projected 3D observations are smoothed by a constant-velocity Kalman filter~\cite{kalmanfilter1960} with state
+\begin{equation}
+\mathbf{x}_k = [x,\;y,\;z,\;v_x,\;v_y,\;v_z]^\top
+\label{eq:kalman_state}
+\end{equation}
+where $(x,y,z)$ denotes target position and $(v_x,v_y,v_z)$ denotes target velocity in the camera optical frame. The filter is initialized from the first valid 3D measurement, with position set directly from the observation and velocity initialized to zero.
+
+Assuming constant velocity over a short sampling interval $\Delta t$, the transition model is
+\begin{equation}
+\mathbf{x}_{k+1} =
+\begin{bmatrix}
+1 & 0 & 0 & \Delta t & 0 & 0 \\
+0 & 1 & 0 & 0 & \Delta t & 0 \\
+0 & 0 & 1 & 0 & 0 & \Delta t \\
+0 & 0 & 0 & 1 & 0 & 0 \\
+0 & 0 & 0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 0 & 0 & 1
+\end{bmatrix}
+\mathbf{x}_k + \mathbf{w}_k
+\label{eq:kalman_transition}
+\end{equation}
+where $\mathbf{w}_k$ is the process noise. In the current implementation, the process covariance is diagonal and scales with $\Delta t$, with separate tunable terms for position and velocity noise. Since the perception stack directly observes only position, the measurement model is
+\begin{equation}
+\mathbf{z}_k =
+\begin{bmatrix}
+1 & 0 & 0 & 0 & 0 & 0 \\
+0 & 1 & 0 & 0 & 0 & 0 \\
+0 & 0 & 1 & 0 & 0 & 0
+\end{bmatrix}
+\mathbf{x}_k + \mathbf{v}_k
+\label{eq:kalman_measurement}
+\end{equation}
+where $\mathbf{z}_k = [x,y,z]^\top$ is the incoming 3D observation and $\mathbf{v}_k$ is the measurement noise.
+
+For each update, the filter predicts the state forward using the elapsed interval since the previous measurement and then applies a correction using the new 3D observation if that observation passes the gating test described below. The resulting 6-state estimate is published on \texttt{/tracking/kalman\_state} as a \texttt{Float64MultiArray}, which is then consumed by the PINN prediction node described in Section~\ref{sec:pinn}.
+
+\subsection{Mahalanobis Gating and Filter Reset}
+\label{sec:kalman_gating}
+
+To reduce the impact of spurious depth measurements, AIRHOUND applies Mahalanobis gating within the 3D Kalman filter before the correction step. Let the innovation residual be
+\begin{equation}
+\mathbf{y}_k = \mathbf{z}_k - \mathbf{H}\mathbf{x}_k
+\label{eq:innovation_residual}
+\end{equation}
+and let the innovation covariance be
+\begin{equation}
+\mathbf{S}_k = \mathbf{H}\mathbf{P}_k\mathbf{H}^\top + \mathbf{R}
+\label{eq:innovation_covariance}
+\end{equation}
+where $\mathbf{P}_k$ is the state covariance and $\mathbf{R}$ is the measurement-noise covariance. The implementation evaluates the Mahalanobis distance
+\begin{equation}
+d_k = \sqrt{\mathbf{y}_k^\top \mathbf{S}_k^{-1}\mathbf{y}_k}
+\label{eq:mahalanobis_distance}
+\end{equation}
+and accepts the measurement only if \(d_k\) is below a configurable threshold.
+
+In the current implementation, the default gating threshold is 3.0. Measurements with \(d_k < 3.0\) are accepted by the Kalman update, while larger residuals are rejected as outliers. Rejected measurements increment a missed-update counter maintained by the gated filter, and the filter resets after more than 30 consecutive misses. At a nominal 30~Hz update rate, this corresponds to approximately 1~s without an accepted 3D correction.
+
+This gating step is particularly important for stereo depth, where the bounding-box centre may occasionally fall on unstable disparity regions or on background pixels instead of the target body. During short interruptions, the most recent valid Kalman state can still support constant-velocity extrapolation in the downstream tracking logic. However, the reset limit prevents stale state from being propagated indefinitely when valid 3D corrections are not recovered.
+
+\subsection{Depth Quality Monitoring}
+\label{sec:depth_quality}
+
+In addition to publishing the 3D target estimate, the perception node reports lightweight diagnostics describing the health of the depth stream. A binary availability signal is published on \texttt{/perception/depth\_available}, while \texttt{/perception/depth\_quality} reports the ratio of detections in the current frame that produced valid in-range depth values. These topics allow downstream modules and offline analysis tools to distinguish detector dropouts from degraded depth sensing.
+
+This separation is useful because failures in stereo depth and failures in 2D detection are not equivalent. A detector may still localize the target in the image while the depth estimate becomes unreliable due to low texture, boundary mismatch, or range limitations. By exposing depth quality explicitly at the ROS~2 interface level, AIRHOUND preserves a clean separation between perception, tracking, and control while still allowing later stages to respond appropriately when metric depth becomes unavailable.
+
 
 % ============================================================================
 \section{Physics-Informed Trajectory Prediction}
