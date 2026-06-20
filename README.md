@@ -2,7 +2,7 @@
 
 **Autonomous Intelligent Real-time Hunting Of Uncrewed Navigating Drones**
 
-A ROS2-based autonomous drone pursuit system using transformer-based object detection, depth fusion, and PX4 offboard control. Developed for the **SPIE Defense + Security 2026** conference (DS112: Machine Learning from Challenging Data).
+A ROS2-based autonomous drone pursuit system using transformer-based object detection, depth fusion, and PX4 offboard control. Published in **Proc. SPIE Defense + Commercial Sensing 2026** (DS112: Machine Learning from Challenging Data), paper 140300O. [doi:10.1117/12.3094732](https://www.spiedigitallibrary.org/conference-proceedings-of-spie/14030/140300O/Predictive-target-pursuit-for-autonomous-UAVs-using-RF-DETR-with/10.1117/12.3094732.short)
 
 ---
 
@@ -361,8 +361,7 @@ AIRHOUND/
 │   ├── FLIGHT_TESTING_GUIDE.md     # Flight procedures
 │   ├── PERCEPTION_INTERFACE.md     # Perception API documentation
 │   ├── PINN_DATA_FORMAT.md         # Trajectory data format for PINN
-│   ├── DEGRADATION_EVAL_RESULTS.md # Benchmarking results
-│   └── SPIE-Conference-Roadmap.md  # Project timeline
+│   └── DEGRADATION_EVAL_RESULTS.md # Benchmarking results
 ├── models/
 │   ├── drone_rfdetr.engine         # TensorRT optimized (Git LFS)
 │   └── drone_rfdetr_best.onnx      # ONNX export (Git LFS)
@@ -423,8 +422,6 @@ See [docs/DEGRADATION_EVAL_RESULTS.md](docs/DEGRADATION_EVAL_RESULTS.md) for com
 | [PERCEPTION_INTERFACE.md](docs/PERCEPTION_INTERFACE.md) | Topic formats, depth integration, code examples |
 | [PINN_DATA_FORMAT.md](docs/PINN_DATA_FORMAT.md) | Trajectory extraction for PINN training |
 | [DEGRADATION_EVAL_RESULTS.md](docs/DEGRADATION_EVAL_RESULTS.md) | Full benchmarking analysis |
-| [SPIE-Conference-Roadmap.md](docs/SPIE-Conference-Roadmap.md) | Project timeline and milestones |
-
 ---
 
 ## Troubleshooting
@@ -580,13 +577,14 @@ source install/setup.bash
 If you use AIRHOUND in your research, please cite:
 
 ```bibtex
-@inproceedings{airhound2026,
-  title={AIRHOUND: Autonomous Drone Pursuit with Transformer-Based Detection 
-         Under Challenging Visual Conditions},
-  author={EPPL Team},
-  booktitle={SPIE Defense + Security 2026 (DS112: Machine Learning from Challenging Data)},
+@inproceedings{malarchick2026airhound,
+  title={Predictive Target Pursuit for Autonomous UAVs using RF-DETR with
+         Depth-Aware State Estimation and Physics-Informed Trajectory Prediction},
+  author={Malarchick, Rylan and others},
+  booktitle={Proc. SPIE 14030, Defense + Commercial Sensing 2026},
+  pages={140300O},
   year={2026},
-  organization={SPIE}
+  doi={10.1117/12.3094732}
 }
 ```
 
@@ -602,4 +600,4 @@ If you use AIRHOUND in your research, please cite:
 
 **EPPL Lab** - Embry-Riddle Aeronautical University
 
-*Autonomous drone pursuit research for SPIE Defense + Security 2026*
+*Autonomous drone pursuit research for SPIE Defense + Commercial Sensing 2026*
